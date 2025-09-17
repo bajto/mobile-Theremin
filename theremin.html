@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Theremin mobilny — kalibracja X/Y/Z + ADSR (neon)</title>
+<title>Theremin mobilny — Kalibracja Z→Y→X + ADSR (neon)</title>
 <style>
   :root{
     --bg:#0e1117; --panel:#0a1420; --fg:#e6eef8; --mut:#9fb;
-    --neon:#39ffc3; --neon2:#7ee1ff; --warn:#ffb86b; --err:#ff6b6b;
+    --neon:#39ffc3; --neon2:#7ee1ff;
   }
   *{box-sizing:border-box}
   body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--fg);margin:0;padding:12px}
@@ -16,57 +16,60 @@
   .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0}
   label{min-width:120px;font-size:13px}
   input[type=range],input[type=number],select{background:#142233;border:1px solid #2a3d55;color:var(--fg);border-radius:8px;padding:8px}
-  .value{width:76px;text-align:center}
+  .value{width:80px;text-align:center}
   .mut{color:var(--mut);font-size:12px}
-  /* Neon buttons */
-  .btn{position:relative; padding:10px 14px; border:1px solid #2a3d55; border-radius:10px; background:#101c2a; color:#dff; cursor:pointer; transition:transform .04s}
+
+  /* Neon buttons (widoczny stan .on) */
+  .btn{position:relative; padding:10px 14px; border:1px solid #2a3d55; border-radius:10px; background:#101c2a; color:#dff; cursor:pointer; transition:transform .04s, box-shadow .15s, border-color .15s}
   .btn:active{transform:translateY(1px)}
-  .btn.neon{box-shadow:0 0 0 rgba(0,0,0,0)}
   .btn.neon.on{
-    border-color:#1a6; color:#eafff7;
-    box-shadow:0 0 8px rgba(57,255,195,.6), 0 0 16px rgba(57,255,195,.35), inset 0 0 6px rgba(57,255,195,.2);
+    border-color:#1a6;
+    box-shadow:0 0 8px rgba(57,255,195,.7), 0 0 16px rgba(57,255,195,.45), inset 0 0 8px rgba(57,255,195,.25);
+    color:#eafff7;
   }
-  .btn.alt.on{
-    border-color:#29a; color:#eaf7ff;
-    box-shadow:0 0 8px rgba(126,225,255,.6), 0 0 16px rgba(126,225,255,.35), inset 0 0 6px rgba(126,225,255,.2);
+  .btn.neon.alt.on{
+    border-color:#29a;
+    box-shadow:0 0 8px rgba(126,225,255,.7), 0 0 16px rgba(126,225,255,.45), inset 0 0 8px rgba(126,225,255,.25);
+    color:#f2fbff;
   }
   .chip{display:inline-block;padding:2px 10px;border-radius:12px;border:1px solid #2a3d55;font-size:12px}
-  .on{background:#0c281c;color:#93f7cc;border-color:#208d64}
-  .off{background:#2a1410;color:#ffcdb1;border-color:#8d4b20}
+  .chip.on{background:#0c281c;color:#93f7cc;border-color:#208d64}
+  .chip.off{background:#2a1410;color:#ffcdb1;border-color:#8d4b20}
+
   #wave{width:100%;height:170px;background:#06111a;border-radius:10px}
   #calibCanvas{width:100%;height:140px;background:#07111b;border-radius:10px}
+
   .progress{height:8px;background:#0b1826;border-radius:999px;overflow:hidden;border:1px solid #24364f}
   .progress>div{height:100%;width:0%;background:linear-gradient(90deg,var(--neon),var(--neon2));}
 </style>
 </head>
 <body>
-<h1>Theremin mobilny — kalibracja X/Y/Z + ADSR</h1>
+<h1>Theremin mobilny — Z (mute) • Y (pitch) • X (volume)</h1>
 
-<!-- STEROWANIE / PRZYCISKI -->
 <div class="box">
   <div class="row">
-    <button id="btnAudio" class="btn neon">Włącz audio</button>
+    <button id="btnAudio"   class="btn neon">Włącz audio</button>
     <button id="btnSensors" class="btn neon alt">Włącz czujniki</button>
-    <button id="btnCal" class="btn">Kalibracja (neutral)</button>
-    <button id="btnWizard" class="btn">Start kalibracji ruchu (X→Y→Z)</button>
-    <button id="btnZero" class="btn">Wyzeruj pozycję</button>
-    <button id="btnStop" class="btn">Stop</button>
-    <button id="btnNote" class="btn neon alt">NOTE ON</button>
+    <button id="btnCal"     class="btn">Kalibracja (neutral)</button>
+    <button id="btnWizard"  class="btn neon">Kreator kalibracji (Z→Y→X)</button>
+    <button id="btnZero"    class="btn">Wyzeruj pozycję</button>
+    <button id="btnStop"    class="btn">Stop</button>
+    <button id="btnNote"    class="btn neon alt">NOTE ON</button>
     <span id="gateChip" class="chip off">gate: OFF</span>
   </div>
   <div class="mut">
-    Telefon przypięty do ręki jak „leży na stole” (ekran do góry).<br>
-    • <b>X (lewo↔prawo)</b> → częstotliwość • <b>Y (góra↕dół)</b> → głośność • <b>Z</b> → wyjęcie/włożenie dłoni (mute poza warstwą).<br>
-    Brak ruchu ⇒ pozycja (X,Y,Z) się utrzymuje. ADSR działa na NOTE ON/OFF.
+    Telefon przypięty do dłoni jak „leży na stole” (ekran do góry).<br>
+    • <b>Z</b>: włożenie/wyjęcie ręki ze strefy (mute poza strefą) ·
+    • <b>Y (góra↕dół)</b>: <b>częstotliwość</b> (≥2 oktawy) ·
+    • <b>X (lewo↔prawo)</b>: <b>głośność</b> (w strefie Z).<br>
+    Brak ruchu ⇒ utrzymujemy ostatnie X/Y (dźwięk „stoi”).
   </div>
-  <!-- SENSORY tuż pod opisem -->
   <div class="row mut" id="sensorStatus">
     <span id="dmAvail">DeviceMotion: —</span> · <span id="doAvail">DeviceOrientation: —</span> ·
     dx: <span id="dxVal" class="value">—</span> dy: <span id="dyVal" class="value">—</span> dz: <span id="dzVal" class="value">—</span>
   </div>
 </div>
 
-<!-- PARAMETRY RUCHU -->
 <div class="box">
   <div class="row">
     <label>Zakres X (± m)</label><input id="rangeX" type="number" step="0.01" value="0.25" style="width:90px">
@@ -79,10 +82,10 @@
     <label>Pitch base (Hz)</label><input id="pitchBase" type="number" value="220" step="1" style="width:80px">
   </div>
   <div class="row">
-    <label>Smoothing</label><input id="smooth" type="range" min="0" max="0.98" step="0.01" value="0.90"><span id="smoothVal" class="value">0.90</span>
+    <label>Smoothing</label><input id="smooth" type="range" min="0" max="0.98" step="0.01" value="0.92"><span id="smoothVal" class="value">0.92</span>
     <label>Deadzone a (m/s²)</label><input id="deadzone" type="range" min="0" max="0.25" step="0.005" value="0.03"><span id="deadVal" class="value">0.03</span>
-    <label>Friction</label><input id="fric" type="range" min="0.90" max="0.999" step="0.001" value="0.992"><span id="fricVal" class="value">0.992</span>
-    <label>Master gain</label><input id="gainMax" type="number" value="0.9" step="0.05" style="width:80px">
+    <label>Friction</label><input id="fric" type="range" min="0.90" max="0.999" step="0.001" value="0.993"><span id="fricVal" class="value">0.993</span>
+    <label>Master gain</label><input id="gainMax" type="number" value="0.90" step="0.05" style="width:80px">
   </div>
   <div class="row">
     <label>Quantize</label><input id="quantize" type="checkbox">
@@ -96,11 +99,10 @@
   </div>
 </div>
 
-<!-- ADSR -->
 <div class="box">
   <div style="font-weight:600;margin-bottom:4px">ADSR</div>
   <div class="row">
-    <label>Attack (s)</label><input id="att" type="range" min="0" max="2" step="0.01" value="0.04"><span id="attVal" class="value">0.04</span>
+    <label>Attack (s)</label><input id="att" type="range" min="0" max="2" step="0.01" value="0.05"><span id="attVal" class="value">0.05</span>
     <label>Decay (s)</label><input id="dec" type="range" min="0" max="2" step="0.01" value="0.15"><span id="decVal" class="value">0.15</span>
     <label>Sustain</label><input id="sus" type="range" min="0" max="1" step="0.01" value="0.75"><span id="susVal" class="value">0.75</span>
     <label>Release (s)</label><input id="rel" type="range" min="0" max="3" step="0.01" value="0.30"><span id="relVal" class="value">0.30</span>
@@ -113,31 +115,27 @@
   </div>
 </div>
 
-<!-- FALA + KALIBRACJA -->
 <div class="box">
   <canvas id="wave" width="960" height="170"></canvas>
 </div>
 
+<!-- KREATOR: Z → Y → X -->
 <div class="box" id="wizardBox" style="display:none">
   <div class="row" style="width:100%;align-items:flex-start">
-    <div style="flex:1;min-width:220px">
-      <div style="font-weight:600;margin-bottom:6px">Kalibracja ruchu (3 etapy)</div>
+    <div style="flex:1;min-width:240px">
+      <div style="font-weight:600;margin-bottom:6px">Kreator kalibracji</div>
       <div id="wizText" class="mut">Instrukcja pojawi się tutaj…</div>
       <div class="progress" style="margin-top:8px"><div id="wizProg"></div></div>
-      <div class="row" style="margin-top:8px">
-        <button id="wizStart" class="btn neon">Rozpocznij pomiar</button>
-        <button id="wizCancel" class="btn">Zakończ</button>
-      </div>
-      <div class="mut" style="margin-top:6px">Wskazówka: ruch płynny, do skrajnych pozycji, w rytmie ~1 Hz. 5 pełnych powtórzeń w każdej osi.</div>
+      <div class="row" id="wizBtns" style="margin-top:8px"></div>
+      <div class="mut" style="margin-top:6px">Kroki: 1) <b>Z</b> (włóż→potwierdź, wyjmij→potwierdź) · 2) <b>Y</b> (5x góra/dół) · 3) <b>X</b> (5x lewo/prawo <i>w strefie Z</i>).</div>
     </div>
-    <div style="flex:1;min-width:220px;margin-left:10px">
+    <div style="flex:1;min-width:240px;margin-left:10px">
       <canvas id="calibCanvas" width="480" height="140"></canvas>
-      <div class="mut" style="margin-top:4px">Rysunek testu: X (↔) – machaj w lewo/prawo; Y (↕) – podnieś/opuść; Z – wysuń rękę do przodu i cofnij.</div>
+      <div class="mut" style="margin-top:4px">Rysunek testu: Z – wsuwaj/wyjmuj; Y – podnoś/opuszczaj; X – przesuwaj w poziomie (w strefie Z).</div>
     </div>
   </div>
 </div>
 
-<!-- ODCZYTY -->
 <div class="box">
   <div class="row mut">
     <label>Odczyty</label>
@@ -153,33 +151,27 @@
 
 <script>
 (()=>{
-// ========== POMOCNICZE ==========
+// ---------- utils ----------
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const lerp =(a,b,t)=>a+(b-a)*t;
-function linMap(x,inA,inB,outA,outB){ if(inA===inB) return (outA+outB)/2; let t=(x-inA)/(inB-inA); t=clamp(t,0,1); return outA + t*(outB-outA); }
 
-// ========== AUDIO ==========
+// ---------- audio ----------
 let audio=null, osc=null, env=null, volGain=null, masterGain=null, analyser=null;
 let running=false, gate=false;
 
 function initAudio(){
   if(audio) return;
   audio=new (window.AudioContext||window.webkitAudioContext)();
-
   osc=audio.createOscillator();
-  osc.type=document.getElementById('oscType').value||'sine';
-  osc.frequency.value=440;
-
-  env=audio.createGain(); env.gain.value=0;             // obwiednia
-  volGain=audio.createGain(); volGain.gain.value=0;     // poziom z Y
+  osc.type=oscType.value; osc.frequency.value=440;
+  env=audio.createGain(); env.gain.value=0;
+  volGain=audio.createGain(); volGain.gain.value=0;
   masterGain=audio.createGain(); masterGain.gain.value=parseFloat(gainMax.value);
   analyser=audio.createAnalyser(); analyser.fftSize=1024;
-
   osc.connect(env); env.connect(volGain); volGain.connect(masterGain);
   masterGain.connect(analyser); analyser.connect(audio.destination);
   osc.start();
-
-  document.getElementById('oscType').addEventListener('change',()=>{ osc.type=document.getElementById('oscType').value; waveRead.textContent=osc.type; });
+  oscType.addEventListener('change',()=>{ osc.type=oscType.value; waveRead.textContent=osc.type; });
   gainMax.addEventListener('input',()=> masterGain.gain.value=parseFloat(gainMax.value));
 }
 
@@ -188,15 +180,15 @@ function gateOn(){
   const now=audio.currentTime, A=+att.value, D=+dec.value, S=+sus.value;
   env.gain.cancelScheduledValues(now);
   env.gain.setValueAtTime(env.gain.value, now);
-  env.gain.linearRampToValueAtTime(1.0, now + A);
-  env.gain.linearRampToValueAtTime(S,   now + A + D);
+  env.gain.linearRampToValueAtTime(1.0, now+A);
+  env.gain.linearRampToValueAtTime(S,   now+A+D);
 }
 function gateOff(){
   if(!audio) return;
   const now=audio.currentTime, R=+rel.value;
   env.gain.cancelScheduledValues(now);
   env.gain.setValueAtTime(env.gain.value, now);
-  env.gain.linearRampToValueAtTime(0.0, now + R);
+  env.gain.linearRampToValueAtTime(0.0, now+R);
 }
 function setGate(on){
   gate=on;
@@ -207,7 +199,7 @@ function setGate(on){
   if(on) gateOn(); else gateOff();
 }
 
-// ========== UI ELEMENTY ==========
+// ---------- DOM ----------
 const btnAudio = document.getElementById('btnAudio');
 const btnSensors=document.getElementById('btnSensors');
 const btnCal=document.getElementById('btnCal');
@@ -227,43 +219,34 @@ const pitchBase=document.getElementById('pitchBase');
 const smooth=document.getElementById('smooth'), smoothVal=document.getElementById('smoothVal');
 const deadzone=document.getElementById('deadzone'), deadVal=document.getElementById('deadVal');
 const fric=document.getElementById('fric'), fricVal=document.getElementById('fricVal');
-[smooth,deadzone,fric].forEach(el=>el.addEventListener('input',()=>{
-  smoothVal.textContent=(+smooth.value).toFixed(2);
-  deadVal.textContent=(+deadzone.value).toFixed(2);
-  fricVal.textContent=(+fric.value).toFixed(3);
-}));
 
-const quantize=document.getElementById('quantize');
-const scale=document.getElementById('scale');
-const gainMax=document.getElementById('gainMax');
+const quantize=document.getElementById('quantize'), scale=document.getElementById('scale');
+const gainMax=document.getElementById('gainMax'), oscType=document.getElementById('oscType');
 
 const dmAvail=document.getElementById('dmAvail');
 const doAvail=document.getElementById('doAvail');
-const dxVal=document.getElementById('dxVal');
-const dyVal=document.getElementById('dyVal');
-const dzVal=document.getElementById('dzVal');
+const dxVal=document.getElementById('dxVal'), dyVal=document.getElementById('dyVal'), dzVal=document.getElementById('dzVal');
 
-const xRead=document.getElementById('xRead');
-const yRead=document.getElementById('yRead');
-const zRead=document.getElementById('zRead');
-const pitchRead=document.getElementById('pitchRead');
-const volRead=document.getElementById('volRead');
-const envRead=document.getElementById('envRead');
-const waveRead=document.getElementById('waveRead');
+const xRead=document.getElementById('xRead'), yRead=document.getElementById('yRead'), zRead=document.getElementById('zRead');
+const pitchRead=document.getElementById('pitchRead'), volRead=document.getElementById('volRead'), envRead=document.getElementById('envRead'), waveRead=document.getElementById('waveRead');
 
-btnAudio.onclick = async ()=>{ initAudio(); if (audio.state==='suspended') await audio.resume(); running=true; btnAudio.classList.toggle('on',true); };
+const wave=document.getElementById('wave'); const wctx=wave.getContext('2d');
+
+btnAudio.onclick = async ()=>{ initAudio(); if (audio.state==='suspended') await audio.resume(); running=true; btnAudio.classList.add('on'); };
 btnStop.onclick = ()=>{ running=false; setGate(false); };
 btnNote.onclick = ()=> setGate(!gate);
+btnZero.onclick = ()=>{ posX=posY=posZ=velX=velY=velZ=0; btnZero.classList.add('on'); setTimeout(()=>btnZero.classList.remove('on'),220); };
 
-// domyślnie auto-gate WYŁ. – stabilne testy
-document.getElementById('autoGate').checked=false;
+smooth.addEventListener('input',()=> smoothVal.textContent=(+smooth.value).toFixed(2));
+deadzone.addEventListener('input',()=> deadVal.textContent=(+deadzone.value).toFixed(2));
+fric.addEventListener('input',()=> fricVal.textContent=(+fric.value).toFixed(3));
 
-// ========== SENSORY ==========
+// ---------- sensors ----------
 dmAvail.textContent='DeviceMotion: ' + (typeof DeviceMotionEvent!=='undefined' ? 'OK' : 'brak');
 doAvail.textContent='DeviceOrientation: ' + (typeof DeviceOrientationEvent!=='undefined' ? 'OK' : 'brak');
 
 let ax=0, ay=0, az=0, baseAx=0, baseAy=0, baseAz=0;
-async function enableSensors(){
+btnSensors.onclick = async ()=>{
   try{
     if (typeof DeviceMotionEvent!=='undefined' && typeof DeviceMotionEvent.requestPermission==='function'){
       const ok=await DeviceMotionEvent.requestPermission(); if(ok!=='granted') throw new Error('Brak zgody DeviceMotion');
@@ -273,68 +256,49 @@ async function enableSensors(){
     }
   }catch(_){}
   window.addEventListener('devicemotion', e=>{
-    const src = e.acceleration || e.accelerationIncludingGravity || {x:0,y:0,z:0};
-    ax = (src.x||0); ay=(src.y||0); az=(src.z||0);
-    dxVal.textContent=ax.toFixed(3);
-    dyVal.textContent=ay.toFixed(3);
-    dzVal.textContent=az.toFixed(3);
+    const src=e.acceleration || e.accelerationIncludingGravity || {x:0,y:0,z:0};
+    ax=src.x||0; ay=src.y||0; az=src.z||0;
+    dxVal.textContent=ax.toFixed(3); dyVal.textContent=ay.toFixed(3); dzVal.textContent=az.toFixed(3);
   }, true);
-  btnSensors.classList.toggle('on',true);
-}
-btnSensors.onclick=enableSensors;
+  btnSensors.classList.add('on');
+};
+btnCal.onclick = ()=>{ baseAx=ax; baseAy=ay; baseAz=az; btnCal.classList.add('on'); setTimeout(()=>btnCal.classList.remove('on'),220); };
 
-btnCal.onclick=()=>{ baseAx=ax; baseAy=ay; baseAz=az; btnCal.classList.toggle('on',true); setTimeout(()=>btnCal.classList.remove('on'),400); };
-
-// ========== MODEL POZYCJI (integracja kontrolowana + kalibracja) ==========
-let posX=0, posY=0, posZ=0;       // m
-let velX=0, velY=0, velZ=0;       // m/s
-let lastT=null;
-
-// czułości (będą korygowane przez „Wizard”)
-let sensX=0.10, sensY=0.12, sensZ=0.12; // wpływ a*dt na dV skorygowane, bazowe
-function resetPositions(){ posX=0; posY=0; posZ=0; velX=velY=velZ=0; }
-btnZero.onclick=()=>{ resetPositions(); btnZero.classList.toggle('on',true); setTimeout(()=>btnZero.classList.remove('on'),300); };
+// ---------- position model ----------
+let posX=0,posY=0,posZ=0, velX=0,velY=0,velZ=0, lastT=null;
+let sensX=0.10, sensY=0.12, sensZ=0.12; // modyfikowane przez kreator
 
 function stepPosition(dt){
-  const dz = +deadzone.value;
+  const dz=+deadzone.value;
   let rx=ax-baseAx, ry=ay-baseAy, rz=az-baseAz;
-  if (Math.abs(rx)<dz) rx=0;
-  if (Math.abs(ry)<dz) ry=0;
-  if (Math.abs(rz)<dz) rz=0;
-
-  const F = +fric.value; // tarcie (0.90..0.999)
+  if(Math.abs(rx)<dz) rx=0;
+  if(Math.abs(ry)<dz) ry=0;
+  if(Math.abs(rz)<dz) rz=0;
+  const F=+fric.value;
   velX = velX*F + rx*sensX*dt;
   velY = velY*F + ry*sensY*dt;
   velZ = velZ*F + rz*sensZ*dt;
+  posX += velX*dt; posY += velY*dt; posZ += velZ*dt;
 
-  posX += velX*dt;
-  posY += velY*dt;
-  posZ += velZ*dt;
-
-  const maxX = +rangeX.value, maxY=+rangeY.value, halfZ=+rangeZ.value*0.5;
-  posX = clamp(posX, -maxX, maxX);
-  posY = clamp(posY, 0, maxY);
-  posZ = clamp(posZ, -halfZ*2, halfZ*2);
+  const maxX=+rangeX.value, maxY=+rangeY.value, hz=+rangeZ.value*0.5;
+  posX=clamp(posX,-maxX,maxX);
+  posY=clamp(posY,0,maxY);
+  posZ=clamp(posZ,-hz*2,hz*2);
 }
 
-// ========== PITCH / VOLUME ==========
+// ---------- pitch/volume ----------
 function freqFromY(y){
-  const base = +pitchBase.value;
-  const oct = +octaves.value;
-  const maxY = +rangeY.value;
+  const base=+pitchBase.value, oct=+octaves.value, maxY=+rangeY.value;
   let yNorm = y/maxY;
-  if (noLimit.checked && y>maxY){
-    yNorm = 1 + (y-maxY)/maxY; // powyżej – kolejne oktawy w tym samym tempie
-  } else {
-    yNorm = clamp(yNorm,0,1);
-  }
-  const octSpan = oct * yNorm;
+  if(noLimit.checked && y>maxY) yNorm = 1 + (y-maxY)/maxY;
+  else yNorm = clamp(yNorm,0,1);
+  const octSpan = oct*yNorm;
   return base * Math.pow(2, octSpan);
 }
 function quantizeFreq(freq){
-  if (!quantize.checked || scale.value==='none') return freq;
-  const SCALES={major:[0,2,4,5,7,9,11], minor:[0,2,3,5,7,8,10], pent:[0,2,4,7,9]};
-  const sc=SCALES[scale.value]; if(!sc) return freq;
+  if(!quantize.checked || scale.value==='none') return freq;
+  const S={major:[0,2,4,5,7,9,11], minor:[0,2,3,5,7,8,10], pent:[0,2,4,7,9]};
+  const sc=S[scale.value]; if(!sc) return freq;
   const midi=69+12*Math.log2(freq/440);
   let best=Math.round(midi),bestD=1e9;
   for(let k=-24;k<=24;k++){
@@ -344,22 +308,121 @@ function quantizeFreq(freq){
   return 440*Math.pow(2,(best-69)/12);
 }
 
-// ========== FALA / WIZUALIZACJA ==========
-const wave = document.getElementById('wave'); const wctx=wave.getContext('2d');
+// ---------- wizard Z→Y→X ----------
+const wizardBox=document.getElementById('wizardBox');
+const wizText=document.getElementById('wizText');
+const wizProg=document.getElementById('wizProg');
+const wizBtns=document.getElementById('wizBtns');
+const cCanvas=document.getElementById('calibCanvas'); const cctx=cCanvas.getContext('2d');
+
+let wizStep=0, wizActive=false, reps=0, peakDir=0, lastVal=0, lastPeakT=0;
+function drawHint(){
+  cctx.clearRect(0,0,cCanvas.width,cCanvas.height);
+  cctx.fillStyle='#0a0f16'; cctx.fillRect(0,0,cCanvas.width,cCanvas.height);
+  cctx.strokeStyle='#2e5b84'; cctx.lineWidth=2;
+  const cx=cCanvas.width/2, cy=cCanvas.height/2;
+  cctx.beginPath(); cctx.moveTo(20,cy); cctx.lineTo(cCanvas.width-20,cy); cctx.moveTo(cx,20); cctx.lineTo(cx,cCanvas.height-20); cctx.stroke();
+  cctx.fillStyle='#9fb';
+  if(wizStep===1){ cctx.fillText('Krok 1: Z — włóż (potwierdź), wyjmij (potwierdź)',14,18); cctx.beginPath(); cctx.arc(cx,cy,36,0,2*Math.PI); cctx.stroke(); }
+  if(wizStep===2){ cctx.fillText('Krok 2: Y — podnieś/opuść 5x',14,18); cctx.fillRect(cx-6,cy-60,12,50); cctx.fillRect(cx-6,cy+10,12,50); }
+  if(wizStep===3){ cctx.fillText('Krok 3: X — lewo/prawo 5x (w strefie Z)',14,18); cctx.fillRect(cx-150,cy-6,120,12); cctx.fillRect(cx+30,cy-6,120,12); }
+}
+
+function setWizStep(s){
+  wizStep=s; reps=0; peakDir=0; lastVal=0; lastPeakT=0;
+  wizProg.style.width = (s===0?100:(s-1)*33.4)+'%';
+  drawHint();
+  wizBtns.innerHTML='';
+  if(s===1){
+    wizText.textContent='Krok 1/3 — Z: włóż rękę do strefy (blisko), naciśnij „Potwierdź: w strefie”. Następnie wyjmij rękę ze strefy i naciśnij „Potwierdź: poza strefą”.';
+    const b1=document.createElement('button'); b1.className='btn neon on'; b1.textContent='Potwierdź: w strefie';
+    const b2=document.createElement('button'); b2.className='btn neon on'; b2.textContent='Potwierdź: poza strefą';
+    b1.onclick=()=>{ zInSample = posZ; b1.disabled=true; };
+    b2.onclick=()=>{ zOutSample = posZ; // policz środek i połowę grubości
+      const span = Math.abs(zOutSample - zInSample) || 1e-6;
+      const want = +rangeZ.value;
+      const corr = want / span;  // skoryguj czułość Z
+      sensZ *= corr;
+      zCenter = (zOutSample + zInSample)/2;
+      b2.disabled=true; setWizStep(2);
+    };
+    wizBtns.appendChild(b1); wizBtns.appendChild(b2);
+  } else if(s===2){
+    wizText.textContent='Krok 2/3 — Y: wykonaj 5 płynnych podniesień/opuszczeń (~0.6 m pełnego zakresu).';
+    const b=document.createElement('button'); b.className='btn neon on'; b.textContent='Zacznij Y (5x)'; b.onclick=()=>{ startRepAxis='y'; reps=0; }; wizBtns.appendChild(b);
+  } else if(s===3){
+    wizText.textContent='Krok 3/3 — X: włóż rękę do strefy Z i wykonaj 5 ruchów lewo/prawo (~0.5 m pełnego zakresu).';
+    const b=document.createElement('button'); b.className='btn neon on'; b.textContent='Zacznij X (5x)'; b.onclick=()=>{ startRepAxis='x'; reps=0; }; wizBtns.appendChild(b);
+  } else {
+    wizText.textContent='Kalibracja zakończona. Możesz zamknąć kreator.';
+    const b=document.createElement('button'); b.className='btn'; b.textContent='Zamknij kreator'; b.onclick=()=>{ wizardBox.style.display='none'; btnWizard.classList.remove('on'); wizActive=false; }; wizBtns.appendChild(b);
+  }
+}
+
+let zCenter=0, zInSample=0, zOutSample=0, startRepAxis=null;
+
+btnWizard.onclick=()=>{
+  wizActive=!wizActive;
+  btnWizard.classList.toggle('on',wizActive);
+  wizardBox.style.display = wizActive ? 'block' : 'none';
+  if(wizActive){ setWizStep(1); }
+};
+
+function detectRepeats(dt){
+  if(!wizActive || !startRepAxis) return;
+  // W kroku X wymagamy by ręka była w strefie Z
+  const zActive = Math.abs(posZ - zCenter) <= (+rangeZ.value * 0.5);
+  if(startRepAxis==='x' && !zActive) return;
+
+  const val = (startRepAxis==='y') ? posY : posX;
+  const deriv = val - lastVal;
+  const dir = deriv>0 ? 1 : deriv<0 ? -1 : 0;
+  const now = performance.now();
+  if (dir!==0 && peakDir!==0 && dir!==peakDir && now-lastPeakT>120){
+    // co 2 piki = 1 cykl
+    reps += 0.5;
+    lastPeakT=now;
+    wizProg.style.width = ( (wizStep-1)*33.4 + Math.min(33.4, (reps/5)*33.4) ) + '%';
+  }
+  peakDir=dir; lastVal=val;
+
+  if (reps>=5){
+    // skalibruj czułość dla osi
+    const want = (startRepAxis==='y') ? (+rangeY.value) : (+rangeX.value*2);
+    // oszacuj realny span z ostatnich ~2s
+    // (prosto: użyj min/max pozycji z tego okresu)
+    if(!window._spanHist) window._spanHist=[];
+    window._spanHist.push(val);
+    if(window._spanHist.length>100) window._spanHist.shift();
+    const minV=Math.min(...window._spanHist), maxV=Math.max(...window._spanHist);
+    const span=Math.max(1e-6, Math.abs(maxV-minV));
+    const corr = want / span;
+    if(startRepAxis==='y') sensY *= corr; else sensX *= corr;
+
+    window._spanHist=[];
+    startRepAxis=null; reps=0;
+    if (wizStep===2) setWizStep(3);
+    else setWizStep(0);
+  }
+}
+
+// ---------- drawing ----------
 function drawWave(){
   wctx.clearRect(0,0,wave.width,wave.height);
   wctx.fillStyle='#031017'; wctx.fillRect(0,0,wave.width,wave.height);
+
   // pitch bar
   const f=osc?osc.frequency.value:0;
-  const fx=Math.min(wave.width, (f/ (220*Math.pow(2, +octaves.value+2))) * wave.width);
+  const fx=Math.min(wave.width, (f/(220*Math.pow(2, +octaves.value+2))) * wave.width);
   wctx.fillStyle='#0f8'; wctx.fillRect(0,10,fx,18); wctx.fillStyle='#9fb'; wctx.fillText('Freq: '+Math.round(f)+' Hz',6,24);
+
   // vol bar
   const vg=volGain?volGain.gain.value:0;
   wctx.fillStyle='#f84'; wctx.fillRect(0,40, vg*wave.width,18); wctx.fillStyle='#ffd2b0'; wctx.fillText('Vol: '+vg.toFixed(2),6,54);
+
   // waveform
-  if (analyser){
-    let buf=new Uint8Array(analyser.fftSize);
-    analyser.getByteTimeDomainData(buf);
+  if(analyser){
+    const buf=new Uint8Array(analyser.fftSize); analyser.getByteTimeDomainData(buf);
     wctx.beginPath(); wctx.strokeStyle='#6cf'; wctx.lineWidth=1;
     const step=wave.width/buf.length;
     for(let i=0;i<buf.length;i++){
@@ -368,129 +431,14 @@ function drawWave(){
     }
     wctx.stroke();
   }
+  // Z-strefa (opis)
+  wctx.fillStyle='rgba(255,255,255,.08)';
+  wctx.fillRect(0,wave.height-20,wave.width,4);
+  wctx.fillStyle='#9fb';
+  wctx.fillText('Z strefa ±'+(+rangeZ.value*0.5).toFixed(2)+' m (poza → mute)',6,wave.height-8);
 }
 
-// ========== KALIBRACJA WIZARD ==========
-const wizBox=document.getElementById('wizardBox');
-const wizText=document.getElementById('wizText');
-const wizProg=document.getElementById('wizProg');
-const wizStart=document.getElementById('wizStart');
-const wizCancel=document.getElementById('wizCancel');
-const cCanvas=document.getElementById('calibCanvas'); const cctx=cCanvas.getContext('2d');
-
-let wizStep=0, wizActive=false, wizCount=0, wizTargetRepeats=5;
-let accHist=[], posStart={x:0,y:0,z:0};
-
-function drawCalibHint(step, phase){
-  cctx.clearRect(0,0,cCanvas.width,cCanvas.height);
-  cctx.fillStyle='#0a0f16'; cctx.fillRect(0,0,cCanvas.width,cCanvas.height);
-  cctx.strokeStyle='#2e5b84'; cctx.lineWidth=2;
-  // osie
-  const cx=cCanvas.width/2, cy=cCanvas.height/2;
-  cctx.beginPath(); cctx.moveTo(20,cy); cctx.lineTo(cCanvas.width-20,cy); cctx.moveTo(cx,20); cctx.lineTo(cx,cCanvas.height-20); cctx.stroke();
-  cctx.fillStyle='#9fb';
-  if(step===1){ cctx.fillText('X: machaj w LEWO↔PRAWO', 14, 18); 
-    // strzałki poziome
-    cctx.fillStyle='rgba(126,225,255,.5)';
-    cctx.fillRect(cx-150,cy-6,120,12); cctx.fillRect(cx+30,cy-6,120,12);
-  } else if(step===2){ cctx.fillText('Y: PODNIEŚ i OPUŚĆ (~0.6 m)', 14, 18);
-    cctx.fillStyle='rgba(57,255,195,.5)';
-    cctx.fillRect(cx-6,cy-60,12,50); cctx.fillRect(cx-6,cy+10,12,50);
-  } else if(step===3){ cctx.fillText('Z: WYSUŃ i COFNIJ (~0.15 m)', 14, 18);
-    cctx.beginPath(); cctx.strokeStyle='rgba(255,184,107,.7)'; 
-    cctx.arc(cx,cy,36,0,2*Math.PI); cctx.stroke();
-    cctx.fillStyle='rgba(255,184,107,.2)'; cctx.beginPath(); cctx.arc(cx,cy,56,0,2*Math.PI); cctx.fill();
-  }
-}
-
-function wizSetStep(s){
-  wizStep=s; wizCount=0; accHist=[];
-  let txt='';
-  if(s===1) txt='Etap 1/3 — X: machaj dłonią w LEWO↔PRAWO, szeroko ~0.5 m. Zrób 5 pełnych przejść.';
-  if(s===2) txt='Etap 2/3 — Y: podnieś rękę w GÓRĘ i OPUŚĆ, zakres ~0.6 m. 5 powtórzeń.';
-  if(s===3) txt='Etap 3/3 — Z: wysuń dłoń do PRZODU i cofnij (~0.15 m „grubość” strefy). 5 powtórzeń.';
-  if(s===0) txt='Gotowe. Możesz powtórzyć kalibrację lub zamknąć kreator.';
-  wizText.textContent=txt;
-  drawCalibHint(s,0);
-  wizProg.style.width = (s===0?100: (s-1)*33.4) + '%';
-}
-
-btnWizard.onclick=()=>{
-  wizActive = !wizActive;
-  wizBox.style.display = wizActive ? 'block' : 'none';
-  btnWizard.classList.toggle('on', wizActive);
-  if(wizActive){ resetPositions(); wizSetStep(1); posStart={x:posX,y:posY,z:posZ}; } 
-};
-
-wizCancel.onclick=()=>{ wizActive=false; wizBox.style.display='none'; btnWizard.classList.remove('on'); };
-
-wizStart.onclick=()=>{
-  if(!wizActive) return;
-  // Zliczamy „piki” pozycji w danej osi jako powtórzenia
-  // co 30 ms próbkujemy pos i zapisujemy do accHist
-  accHist=[];
-};
-
-// wykrywanie powtórzeń i kalibracja
-let peakDir=0, lastAxisVal=0, rep=0, lastPeakT=0;
-function detectRepeatsAndCalibrate(dt){
-  if(!wizActive || wizStep===0) return;
-
-  // wybierz oś i cel deklarowany
-  let axis='x', target=+rangeX.value*2; // pełna rozpiętość
-  if(wizStep===2){ axis='y'; target=+rangeY.value; }
-  if(wizStep===3){ axis='z'; target=+rangeZ.value; }
-
-  const val = (axis==='x'? posX : axis==='y'? posY : posZ);
-  const now = performance.now();
-
-  // wykryj lokalne odwrócenie kierunku jako „półokres”
-  const deriv = val - lastAxisVal;
-  const dir = deriv>0 ? 1 : deriv<0 ? -1 : 0;
-
-  // zmiana kierunku = potencjalny szczyt
-  if (dir!==0 && peakDir!==0 && dir!==peakDir && now-lastPeakT>120){
-    rep++; lastPeakT=now;
-    // co dwa piki ~ jeden pełny cykl
-    if (rep%2===0) wizCount++;
-    // zachowaj extremum
-    accHist.push(val);
-    // aktualizuj progress
-    const stepBase = (wizStep-1)*33.4;
-    const p = Math.min(33.4, (wizCount/wizTargetRepeats)*33.4);
-    wizProg.style.width = (stepBase + p) + '%';
-  }
-  peakDir = dir; lastAxisVal = val;
-
-  // po 5 pełnych przejściach kalibruj
-  if (wizCount>=wizTargetRepeats){
-    // z ekstrema policz amplitudę
-    const minV = Math.min(...accHist, (axis==='x'?posStart.x:axis==='y'?posStart.y:posStart.z));
-    const maxV = Math.max(...accHist, (axis==='x'?posStart.x:axis==='y'?posStart.y:posStart.z));
-    const span = Math.abs(maxV - minV) || 1e-6;
-
-    if (wizStep===1){
-      const want = +rangeX.value*2; // lewo-prawo pełny
-      const corr = want / span;
-      sensX *= corr; // skoryguj czułość
-    } else if (wizStep===2){
-      const want = +rangeY.value;   // dół-góra
-      const corr = want / span;
-      sensY *= corr;
-    } else if (wizStep===3){
-      const want = +rangeZ.value;   // wysuń-cofnij
-      const corr = want / span;
-      sensZ *= corr;
-    }
-
-    // następny etap
-    wizCount=0; accHist=[]; peakDir=0; lastAxisVal=0;
-    if (wizStep<3) { wizSetStep(wizStep+1); posStart={x:posX,y:posY,z:posZ}; }
-    else { wizSetStep(0); wizActive=false; wizBox.style.display='none'; btnWizard.classList.remove('on'); }
-  }
-}
-
-// ========== PĘTLA ==========
+// ---------- loop ----------
 let smoothPitch=null;
 function loop(t){
   if (running){
@@ -499,23 +447,27 @@ function loop(t){
     const dt=Math.min(0.05, Math.max(0.001,(now-lastT)/1000)); lastT=now;
 
     stepPosition(dt);
-    detectRepeatsAndCalibrate(dt);
+    detectRepeats(dt);
 
-    // mapowanie: X→pitch (częstotliwość), Y→volume
-    let freq = freqFromY(posY);
+    // Y → pitch (log), X → volume (lin), Z → mute
+    let freq=freqFromY(posY);
     freq = quantizeFreq(freq);
     const s=+smooth.value;
     if (smoothPitch==null) smoothPitch=freq;
-    smoothPitch = lerp(smoothPitch, freq, 1-s);
+    smoothPitch = smoothPitch*s + freq*(1-s);
 
-    const halfZ = +rangeZ.value*0.5;
-    const zActive = Math.abs(posZ) <= halfZ;
+    const zHalf=+rangeZ.value*0.5;
+    const zActive = Math.abs(posZ - zCenter) <= zHalf;
 
     if (osc)  osc.frequency.setTargetAtTime(smoothPitch, audio.currentTime, 0.02);
     if (volGain){
-      // Y steruje głośnością liniowo po kalibracji zakresu (0..maxY)
-      const vol = zActive ? clamp(posY/(+rangeY.value), 0, 1) : 0;
+      const vol = zActive ? clamp( (posX/(+rangeX.value)*0.5 + 0.5), 0, 1) : 0;
       volGain.gain.setTargetAtTime(vol, audio.currentTime, 0.03);
+    }
+    // jeśli Z wyłącza – zamknij gate; jeśli wraca – otwórz (tylko gdy Auto-gate aktywny)
+    if (document.getElementById('autoGate').checked){
+      if (!zActive && gate) setGate(false);
+      if (zActive && !gate) setGate(true);
     }
 
     // odczyty
@@ -532,7 +484,7 @@ function loop(t){
 }
 requestAnimationFrame(loop);
 
-// resume audio po powrocie
+// resume audio
 document.addEventListener('visibilitychange', async ()=>{
   if (audio && audio.state==='suspended' && document.visibilityState==='visible'){
     try{ await audio.resume(); }catch(_){}
