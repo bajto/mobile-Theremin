@@ -3,475 +3,366 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Theremin mobilny — ADSR + czujniki</title>
+<title>Theremin mobilny — pitch(β) • volume(↔ accelX) • reverb(γ)</title>
 <style>
-  :root{--bg:#0e1117;--panel:#0a1420;--fg:#e6eef8;--alt:#9fb;--ok:#1fe39a;--warn:#ffb86b;--err:#ff6b6b}
-  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial; background:var(--bg); color:var(--fg); margin:0; padding:12px}
+  :root{--bg:#0e1117;--panel:#0a1420;--fg:#e6eef8;--mut:#9fb}
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--fg);margin:0;padding:12px}
   h1{font-size:18px;margin:0 0 10px}
-  .controls{background:var(--panel); border:1px solid #203047; border-radius:10px; padding:10px; margin-bottom:10px}
-  .row{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:8px 0}
-  label{min-width:120px; font-size:13px}
-  input[type=range],input[type=number],select,button{background:#132233;border:1px solid #2a3d55;color:var(--fg);border-radius:6px;padding:8px}
+  .box{background:var(--panel);border:1px solid #22364f;border-radius:12px;padding:10px;margin:8px 0}
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0}
+  label{min-width:120px;font-size:13px}
+  input[type=range],input[type=number],select,button{background:#142233;border:1px solid #2a3d55;color:var(--fg);border-radius:8px;padding:8px}
   button{cursor:pointer}
-  #canvas{width:100%;height:150px;background:#06111a;border-radius:8px}
-  .value{width:70px;text-align:center}
-  .small{font-size:12px;color:var(--alt)}
-  .chip{display:inline-block; padding:2px 8px; border-radius:12px; font-size:12px; border:1px solid #2a3d55}
-  .chip.on{background:#0c281c; color:#8ff5c6; border-color:#1b7c57}
-  .chip.off{background:#28120f; color:#ffc2a3; border-color:#7c3d1b}
-  footer{font-size:12px;color:#8aa;margin-top:10px}
+  #canvas{width:100%;height:150px;background:#06111a;border-radius:10px}
+  .value{width:72px;text-align:center}
+  .mut{color:var(--mut);font-size:12px}
+  .chip{display:inline-block;padding:2px 10px;border-radius:12px;border:1px solid #2a3d55;font-size:12px}
+  .on{background:#0c281c;color:#93f7cc;border-color:#208d64}
+  .off{background:#2a1410;color:#ffcdb1;border-color:#8d4b20}
 </style>
 </head>
 <body>
-<h1>Theremin mobilny — ADSR + czujniki</h1>
+<h1>Theremin mobilny — β→pitch, ↔→volume, γ→reverb</h1>
 
-<div class="controls">
+<div class="box">
   <div class="row">
     <button id="btnAudio">Włącz audio</button>
     <button id="btnSensors">Włącz czujniki</button>
     <button id="btnCal">Kalibracja (neutral)</button>
     <button id="btnStop">Stop</button>
-    <button id="btnNote" title="Tryb: Przycisk">NOTE ON</button>
+    <button id="btnNote">NOTE ON</button>
     <span id="gateChip" class="chip off">gate: OFF</span>
   </div>
+  <div class="mut">Sterowanie: Unoszenie/pochylenie ręki (β) = wysokość; ruch ↔ (w prawo głośniej, w lewo ciszej) = głośność; obrót nadgarstka (γ) = „wielkość pomieszczenia” (pogłos/echo).</div>
+</div>
 
+<div class="box">
   <div class="row">
-    <label>Tryb gate</label>
-    <select id="gateMode">
-      <option value="motion">Auto (ruch)</option>
-      <option value="button">Przycisk</option>
-    </select>
-    <label>Próg ruchu</label>
-    <input id="motionThresh" type="range" min="0.05" max="3" step="0.05" value="0.35"/>
-    <span id="motionVal" class="value">0.35</span>
-  </div>
-
-  <div class="row">
-    <label>Pitch min / max (Hz)</label>
-    <input id="pitchMin" type="number" value="150" style="width:80px"/> —
-    <input id="pitchMax" type="number" value="2200" style="width:90px"/>
-  </div>
-
-  <div class="row">
-    <label>Smoothing (0–0.99)</label>
-    <input id="smooth" type="range" min="0" max="0.98" step="0.01" value="0.85"/>
+    <label>Pitch min/max (Hz)</label>
+    <input id="pitchMin" type="number" value="150" style="width:90px"> —
+    <input id="pitchMax" type="number" value="2200" style="width:90px">
+    <label style="margin-left:10px">Smoothing</label>
+    <input id="smooth" type="range" min="0" max="0.98" step="0.01" value="0.85">
     <span id="smoothVal" class="value">0.85</span>
   </div>
-
   <div class="row">
-    <label>Quantize (skala)</label>
-    <input id="quantize" type="checkbox"/>
+    <label>Quantize</label>
+    <input id="quantize" type="checkbox">
     <select id="scale">
       <option value="none">Brak</option>
-      <option value="minor">Molowa naturalna</option>
       <option value="major">Dur</option>
+      <option value="minor">Mol nat.</option>
       <option value="pent">Pentatonic</option>
     </select>
+    <label style="margin-left:10px">Master gain</label>
+    <input id="gainMax" type="number" value="0.9" step="0.05" style="width:80px">
   </div>
+</div>
 
+<div class="box">
+  <div style="font-weight:600;margin-bottom:4px">ADSR</div>
   <div class="row">
-    <label>Pitch source</label>
-    <select id="pitchSource">
-      <option value="gamma">gamma (skręt nadgarstka)</option>
-      <option value="beta">beta (pochylenie przód/tył)</option>
-      <option value="accelX">accel X</option>
-    </select>
-
-    <label>Volume source</label>
-    <select id="gainSource">
-      <option value="accelMag">Przyspieszenie (mag)</option>
-      <option value="accelY">accel Y</option>
-      <option value="beta">beta (pochylenie)</option>
-    </select>
-
-    <label>Osc</label>
-    <select id="oscType">
-      <option>sine</option>
-      <option>triangle</option>
-      <option>square</option>
-      <option>sawtooth</option>
-    </select>
-    <label>Master gain</label>
-    <input id="gainMax" type="number" value="0.8" step="0.05" style="width:70px"/>
+    <label>Attack (s)</label><input id="att" type="range" min="0" max="2" step="0.01" value="0.03"><span id="attVal" class="value">0.03</span>
+    <label>Decay (s)</label><input id="dec" type="range" min="0" max="2" step="0.01" value="0.12"><span id="decVal" class="value">0.12</span>
+    <label>Sustain</label><input id="sus" type="range" min="0" max="1" step="0.01" value="0.75"><span id="susVal" class="value">0.75</span>
+    <label>Release (s)</label><input id="rel" type="range" min="0" max="3" step="0.01" value="0.25"><span id="relVal" class="value">0.25</span>
   </div>
-</div>
-
-<div class="controls">
-  <div style="font-weight:600;margin-bottom:6px">ADSR</div>
   <div class="row">
-    <label>Attack (s)</label>
-    <input id="att" type="range" min="0" max="2" step="0.01" value="0.03"/>
-    <span id="attVal" class="value">0.03</span>
-
-    <label>Decay (s)</label>
-    <input id="dec" type="range" min="0" max="2" step="0.01" value="0.15"/>
-    <span id="decVal" class="value">0.15</span>
-
-    <label>Sustain (0–1)</label>
-    <input id="sus" type="range" min="0" max="1" step="0.01" value="0.7"/>
-    <span id="susVal" class="value">0.70</span>
-
-    <label>Release (s)</label>
-    <input id="rel" type="range" min="0" max="3" step="0.01" value="0.25"/>
-    <span id="relVal" class="value">0.25</span>
+    <label>Gate (auto z ruchu)</label>
+    <input id="autoGate" type="checkbox" checked>
+    <label>Próg ruchu</label>
+    <input id="motionThresh" type="range" min="0.02" max="1.5" step="0.02" value="0.25">
+    <span id="motionVal" class="value">0.25</span>
   </div>
 </div>
 
-<canvas id="canvas" width="900" height="150"></canvas>
-
-<div class="small" id="tips">
-  Tip: przymocuj telefon do grzbietu dłoni lub nadgarstka, skalibruj „neutral”. W trybie Auto dźwięk włącza sam ruch powyżej progu.
+<div class="box">
+  <div style="font-weight:600;margin-bottom:4px">Pogłos / Przestrzeń (sterowane γ)</div>
+  <div class="row">
+    <label>Wet max</label><input id="wetMax" type="range" min="0" max="1" step="0.01" value="0.75"><span id="wetVal" class="value">0.75</span>
+    <label>Delay t max (s)</label><input id="dlyMax" type="range" min="0.05" max="0.8" step="0.01" value="0.55"><span id="dlyVal" class="value">0.55</span>
+    <label>Feedback</label><input id="fb" type="range" min="0" max="0.95" step="0.01" value="0.65"><span id="fbVal" class="value">0.65</span>
+  </div>
 </div>
 
-<div class="small" id="readouts" style="margin-top:6px">
+<canvas id="canvas" width="960" height="150"></canvas>
+
+<div class="mut" id="reads" style="margin-top:6px">
   <div class="row">
     <label>Pitch (Hz)</label><span id="pitchRead" class="value">—</span>
-    <label>Gain</label><span id="gainRead" class="value">—</span>
-    <label>gamma</label><span id="gamma" class="value">—</span>
-    <label>beta</label><span id="beta" class="value">—</span>
-    <label>accelMag</label><span id="accelMag" class="value">—</span>
+    <label>Vol (0–1)</label><span id="volRead" class="value">—</span>
+    <label>β</label><span id="betaRead" class="value">—</span>
+    <label>γ</label><span id="gammaRead" class="value">—</span>
+    <label>accelX</label><span id="axRead" class="value">—</span>
   </div>
-  <div id="status" class="small">status: idle</div>
 </div>
 
-<footer>Autor: SynRa · Jeśli iOS – po „Włącz czujniki” zaakceptuj uprawnienia. „NOTE ON/OFF” działa tylko w trybie Przycisk.</footer>
-
 <script>
-(() => {
-  // ======== Audio ========
-  let audioCtx=null, osc=null, gainEnv=null, masterGain=null, analyser=null;
-  let running=false, gate=false, gateMode='motion';
+(()=>{
+// ===== Audio graph =====
+let audio, osc, env, volGain, masterGain, analyser;
+let delay, fbGain, lp, wetGain, dryGain;
+let running=false, gate=false;
 
-  // ADSR
-  const attEl = document.getElementById('att');
-  const decEl = document.getElementById('dec');
-  const susEl = document.getElementById('sus');
-  const relEl = document.getElementById('rel');
-  const attVal = document.getElementById('attVal');
-  const decVal = document.getElementById('decVal');
-  const susVal = document.getElementById('susVal');
-  const relVal = document.getElementById('relVal');
-  function updADSRVals(){
-    attVal.textContent = (+attEl.value).toFixed(2);
-    decVal.textContent = (+decEl.value).toFixed(2);
-    susVal.textContent = (+susEl.value).toFixed(2);
-    relVal.textContent = (+relEl.value).toFixed(2);
-  }
-  [attEl,decEl,susEl,relEl].forEach(el=>el.addEventListener('input',updADSRVals));
-  updADSRVals();
+function initAudio(){
+  if (audio) return;
+  audio = new (window.AudioContext||window.webkitAudioContext)();
 
-  function initAudio(){
-    if (audioCtx) return;
-    audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-    osc = audioCtx.createOscillator();
-    gainEnv = audioCtx.createGain();       // sterowane obwiednią
-    masterGain = audioCtx.createGain();    // końcowa głośność (zabezpieczenie)
-    analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 1024;
+  // source
+  osc = audio.createOscillator();
+  osc.type = 'sine'; osc.frequency.value = 440;
 
-    osc.type = document.getElementById('oscType').value || 'sine';
-    osc.frequency.value = 440;
-    gainEnv.gain.value = 0.0;              // start: cisza
-    masterGain.gain.value = parseFloat(document.getElementById('gainMax').value);
+  // envelope + per-note volume
+  env = audio.createGain();    env.gain.value = 0;
+  volGain = audio.createGain();volGain.gain.value = 0; // sterowane „↔”
+  masterGain = audio.createGain(); masterGain.gain.value = parseFloat(gainMax.value);
 
-    osc.connect(gainEnv);
-    gainEnv.connect(masterGain);
-    masterGain.connect(analyser);
-    analyser.connect(audioCtx.destination);
-    osc.start();
+  // FX: simple feedback delay + lowpass (cheap „hall”)
+  delay   = audio.createDelay(1.0);  delay.delayTime.value = 0.25;
+  fbGain  = audio.createGain();      fbGain.gain.value = parseFloat(fb.value);
+  lp      = audio.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value = 6000;
+  wetGain = audio.createGain();      wetGain.gain.value = parseFloat(wetMax.value); // sterujemy potem γ
+  dryGain = audio.createGain();      dryGain.gain.value = 1.0;
 
-    // reaguj na zmianę typu oscylatora i master gain
-    document.getElementById('oscType').addEventListener('change',()=>{ if(osc) osc.type = document.getElementById('oscType').value; });
-    document.getElementById('gainMax').addEventListener('input',()=>{ if(masterGain) masterGain.gain.value = parseFloat(document.getElementById('gainMax').value); });
+  // routing
+  osc.connect(env);
+  env.connect(volGain);     // ADSR → volGain (poziom z „↔”)
+  // dry
+  volGain.connect(dryGain);
+  // wet send
+  volGain.connect(delay);
+  delay.connect(lp); lp.connect(wetGain);
+  // feedback loop
+  wetGain.connect(fbGain); fbGain.connect(delay);
 
-    status('audio started');
-  }
+  // sum
+  const mix = audio.createGain();
+  dryGain.connect(mix);
+  wetGain.connect(mix);
+  analyser = audio.createAnalyser(); analyser.fftSize = 1024;
+  mix.connect(masterGain);
+  masterGain.connect(analyser);
+  analyser.connect(audio.destination);
 
-  // Gate ON: atak -> decay -> sustain
-  function gateOn(targetLevel=1.0){
-    if (!audioCtx || !gainEnv) return;
-    const now = audioCtx.currentTime;
-    const A = Math.max(0, +attEl.value);
-    const D = Math.max(0, +decEl.value);
-    const S = Math.min(1, Math.max(0, +susEl.value));
-    const maxLevel = Math.min(1, targetLevel);
+  osc.start();
 
-    gainEnv.gain.cancelScheduledValues(now);
-    // szybki reset do aktualnej wartości
-    const cur = gainEnv.gain.value;
-    gainEnv.gain.setValueAtTime(cur, now);
-    // Attack
-    gainEnv.gain.linearRampToValueAtTime(maxLevel, now + A);
-    // Decay do poziomu sustain
-    gainEnv.gain.linearRampToValueAtTime(S * maxLevel, now + A + D);
-  }
+  // live UI bindings
+  gainMax.addEventListener('input', ()=> masterGain.gain.value = parseFloat(gainMax.value));
+  fb.addEventListener('input', ()=> fbGain.gain.value = parseFloat(fb.value));
 
-  // Gate OFF: release do zera
-  function gateOff(){
-    if (!audioCtx || !gainEnv) return;
-    const now = audioCtx.currentTime;
-    const R = Math.max(0, +relEl.value);
-    const cur = gainEnv.gain.value;
+  status('audio ready');
+}
 
-    gainEnv.gain.cancelScheduledValues(now);
-    gainEnv.gain.setValueAtTime(cur, now);
-    gainEnv.gain.linearRampToValueAtTime(0.0, now + R);
-  }
+function gateOn(){
+  if(!audio||!env) return;
+  const now=audio.currentTime, A=+att.value, D=+dec.value, S=+sus.value;
+  env.gain.cancelScheduledValues(now);
+  env.gain.setValueAtTime(env.gain.value, now);
+  env.gain.linearRampToValueAtTime(1.0, now+A);
+  env.gain.linearRampToValueAtTime(S,   now+A+D);
+}
+function gateOff(){
+  if(!audio||!env) return;
+  const now=audio.currentTime, R=+rel.value;
+  env.gain.cancelScheduledValues(now);
+  env.gain.setValueAtTime(env.gain.value, now);
+  env.gain.linearRampToValueAtTime(0.0, now+R);
+}
 
-  // ======== UI ========
-  const btnAudio = document.getElementById('btnAudio');
-  const btnSensors = document.getElementById('btnSensors');
-  const btnCal = document.getElementById('btnCal');
-  const btnStop = document.getElementById('btnStop');
-  const btnNote = document.getElementById('btnNote');
-  const gateChip = document.getElementById('gateChip');
+// ===== UI elements =====
+const btnAudio=document.getElementById('btnAudio');
+const btnSensors=document.getElementById('btnSensors');
+const btnCal=document.getElementById('btnCal');
+const btnStop=document.getElementById('btnStop');
+const btnNote=document.getElementById('btnNote');
+const gateChip=document.getElementById('gateChip');
 
-  function setGateVisual(on){
-    gateChip.textContent = 'gate: ' + (on?'ON':'OFF');
-    gateChip.classList.toggle('on', on);
-    gateChip.classList.toggle('off', !on);
-    btnNote.textContent = on ? 'NOTE OFF' : 'NOTE ON';
-  }
+const pitchMin=document.getElementById('pitchMin');
+const pitchMax=document.getElementById('pitchMax');
+const smooth=document.getElementById('smooth');
+const smoothVal=document.getElementById('smoothVal');
 
-  btnAudio.onclick = async () => {
-    try {
-      initAudio();
-      if (audioCtx.state === 'suspended') await audioCtx.resume();
-      running = true;
-      status('audio enabled');
-    } catch(e){ status('błąd audio: '+e.message); console.error(e); }
-  };
+const quantize=document.getElementById('quantize');
+const scale=document.getElementById('scale');
+const gainMax=document.getElementById('gainMax');
 
-  btnStop.onclick = () => {
-    running=false;
-    gate=false; setGateVisual(false);
-    gateOff();
-    status('stop — dźwięk wyciszony');
-  };
+const att=document.getElementById('att'),dec=document.getElementById('dec'),
+      sus=document.getElementById('sus'),rel=document.getElementById('rel');
+const attVal=document.getElementById('attVal'),decVal=document.getElementById('decVal'),
+      susVal=document.getElementById('susVal'),relVal=document.getElementById('relVal');
 
-  btnNote.onclick = () => {
-    if (document.getElementById('gateMode').value !== 'button') return;
-    gate = !gate;
-    setGateVisual(gate);
-    if (gate) gateOn(1.0); else gateOff();
-  };
+const autoGate=document.getElementById('autoGate');
+const motionThresh=document.getElementById('motionThresh');
+const motionVal=document.getElementById('motionVal');
 
-  const gateModeEl = document.getElementById('gateMode');
-  gateModeEl.addEventListener('change', ()=>{
-    gateMode = gateModeEl.value;
-    if (gateMode==='motion'){ gate=false; setGateVisual(false); gateOff(); }
-  });
+const wetMax=document.getElementById('wetMax'), dlyMax=document.getElementById('dlyMax'), fb=document.getElementById('fb');
+const wetVal=document.getElementById('wetVal'), dlyVal=document.getElementById('dlyVal'), fbVal=document.getElementById('fbVal');
 
-  const motionThreshEl = document.getElementById('motionThresh');
-  const motionValEl = document.getElementById('motionVal');
-  motionThreshEl.addEventListener('input', ()=> motionValEl.textContent = (+motionThreshEl.value).toFixed(2));
-  motionValEl.textContent = (+motionThreshEl.value).toFixed(2);
+const pitchRead=document.getElementById('pitchRead'), volRead=document.getElementById('volRead');
+const betaRead=document.getElementById('betaRead'), gammaRead=document.getElementById('gammaRead'), axRead=document.getElementById('axRead');
 
-  // ======== Czujniki ========
-  let neutral = { gamma:0, beta:0, accelX:0, accelY:0, accelZ:0 };
-  let lastEvent = null;
+function status(t){ /* console + subtle UI if chcesz */ }
 
-  async function enableSensors(){
-    try{
-      if (typeof DeviceMotionEvent!=='undefined' && typeof DeviceMotionEvent.requestPermission==='function'){
-        const r=await DeviceMotionEvent.requestPermission(); if(r!=='granted') throw new Error('Brak zgody DeviceMotion');
-      }
-      if (typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){
-        try{ await DeviceOrientationEvent.requestPermission(); }catch(_){}
-      }
-      window.addEventListener('devicemotion', onDeviceMotion, true);
-      window.addEventListener('deviceorientation', onDeviceOrientation, true);
-      status('czujniki włączone');
-    }catch(e){ status('błąd czujników: '+e.message); console.warn(e); }
-  }
-  btnSensors.onclick = ()=> enableSensors();
+[smooth].forEach(x=>x.addEventListener('input',()=>smoothVal.textContent=(+smooth.value).toFixed(2)));
+[att,dec,sus,rel].forEach(x=>x.addEventListener('input',()=>{
+  attVal.textContent=(+att.value).toFixed(2);
+  decVal.textContent=(+dec.value).toFixed(2);
+  susVal.textContent=(+sus.value).toFixed(2);
+  relVal.textContent=(+rel.value).toFixed(2);
+}));
+[motionThresh].forEach(x=>x.addEventListener('input',()=>motionVal.textContent=(+motionThresh.value).toFixed(2)));
+[wetMax,dlyMax,fb].forEach(x=>x.addEventListener('input',()=>{
+  wetVal.textContent=(+wetMax.value).toFixed(2);
+  dlyVal.textContent=(+dlyMax.value).toFixed(2);
+  fbVal.textContent=(+fb.value).toFixed(2);
+}));
 
-  btnCal.onclick = ()=>{
-    if (!lastEvent){ status('brak danych do kalibracji — porusz delikatnie telefonem'); return; }
-    neutral.gamma=lastEvent.gamma??0;
-    neutral.beta =lastEvent.beta ??0;
-    neutral.accelX=lastEvent.accelX??0;
-    neutral.accelY=lastEvent.accelY??0;
-    neutral.accelZ=lastEvent.accelZ??0;
-    status('skalibrowano neutral');
-  };
+function setGate(on){
+  gate=on;
+  gateChip.textContent = 'gate: '+(on?'ON':'OFF');
+  gateChip.classList.toggle('on',on);
+  gateChip.classList.toggle('off',!on);
+  btnNote.textContent = on?'NOTE OFF':'NOTE ON';
+  if(on) gateOn(); else gateOff();
+}
 
-  function onDeviceOrientation(e){
-    lastEvent = lastEvent || {};
-    lastEvent.gamma = e.gamma;
-    lastEvent.beta  = e.beta;
-  }
-  function onDeviceMotion(e){
+btnAudio.onclick = async ()=>{
+  initAudio();
+  if (audio.state==='suspended') await audio.resume();
+  running=true;
+};
+btnStop.onclick = ()=>{ running=false; setGate(false); if(volGain) volGain.gain.value=0; };
+btnNote.onclick = ()=> setGate(!gate);
+
+// ===== Sensors & mapping =====
+let neutral={beta:0,gamma:0,ax:0,ay:0,az:0};
+let beta=0,gamma=0,ax=0,ay=0,az=0;
+let lastTs=null;
+
+// „pozycja głośności” z integracji accelX (↔)
+let volPos=0; // 0..1
+const volSens = 0.08;   // czułość integracji (tunowalne)
+const volDecay = 0.985; // dryf powrotny (stabilizacja)
+
+function clamp(v,a,b){ return Math.min(b,Math.max(a,v)); }
+function linMap(x,a,b,c,d){ if (b===a) return (c+d)/2; let t=(x-a)/(b-a); return c + clamp(t,0,1)*(d-c); }
+
+async function enableSensors(){
+  try{
+    if (typeof DeviceMotionEvent!=='undefined' && typeof DeviceMotionEvent.requestPermission==='function'){
+      const ok=await DeviceMotionEvent.requestPermission(); if(ok!=='granted') throw new Error('No DeviceMotion permission');
+    }
+    if (typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){
+      try{ await DeviceOrientationEvent.requestPermission(); }catch(_){}
+    }
+  }catch(e){ /* ignore if not iOS */ }
+  window.addEventListener('deviceorientation', e=>{
+    if (typeof e.beta === 'number')  beta  = e.beta;
+    if (typeof e.gamma === 'number') gamma = e.gamma;
+  }, true);
+  window.addEventListener('devicemotion', e=>{
     const a = e.accelerationIncludingGravity || e.acceleration || {x:0,y:0,z:0};
-    lastEvent = lastEvent || {};
-    lastEvent.accelX = a.x||0;
-    lastEvent.accelY = a.y||0;
-    lastEvent.accelZ = a.z||0;
-    lastEvent.accelMag = Math.sqrt((a.x||0)**2 + (a.y||0)**2 + (a.z||0)**2);
-  }
+    ax = a.x||0; ay=a.y||0; az=a.z||0;
+  }, true);
+}
+btnSensors.onclick = enableSensors;
 
-  // ======== Mapowanie / DSP ========
-  const pitchMinEl = document.getElementById('pitchMin');
-  const pitchMaxEl = document.getElementById('pitchMax');
-  const smoothEl = document.getElementById('smooth');
-  const smoothVal = document.getElementById('smoothVal');
-  smoothEl.addEventListener('input', ()=> smoothVal.textContent = (+smoothEl.value).toFixed(2));
-  const quantizeEl = document.getElementById('quantize');
-  const scaleEl = document.getElementById('scale');
-  const pitchSourceEl = document.getElementById('pitchSource');
-  const gainSourceEl  = document.getElementById('gainSource');
+btnCal.onclick = ()=>{
+  neutral.beta=beta; neutral.gamma=gamma; neutral.ax=ax; neutral.ay=ay; neutral.az=az;
+};
 
-  const pitchRead = document.getElementById('pitchRead');
-  const gainRead  = document.getElementById('gainRead');
-  const gammaRead = document.getElementById('gamma');
-  const betaRead  = document.getElementById('beta');
-  const accelMagRead = document.getElementById('accelMag');
-  const statusEl = document.getElementById('status');
-
-  let smoothing = parseFloat(smoothEl.value);
-  let smoothedPitch=null;
-  let smoothedGain=0;
-
-  function status(txt){ statusEl.textContent = 'status: ' + txt; }
-
-  function linMap(x,inMin,inMax,outMin,outMax){
-    if (inMax===inMin) return (outMin+outMax)/2;
-    let v=(x-inMin)/(inMax-inMin);
-    if (v<0) v=0; if(v>1) v=1;
-    return outMin + v*(outMax-outMin);
-  }
-
-  const SCALES={
-    none:null,
+function quantizeFreq(freq, mode){
+  if (!quantize.checked || mode==='none') return freq;
+  const SCALES = {
     major:[0,2,4,5,7,9,11],
     minor:[0,2,3,5,7,8,10],
     pent:[0,2,4,7,9]
   };
-  function quantizeFreq(freq, scaleName){
-    if (!scaleName || scaleName==='none') return freq;
-    const scale=SCALES[scaleName];
-    let midi = 69 + 12*Math.log2(freq/440);
-    let best=null,bestDiff=1e9;
-    for(let k=-24;k<=24;k++){ // szukaj ±2 okt.
-      const cand = Math.round(midi)+k;
-      const deg = ((cand%12)+12)%12;
-      if (scale.includes(deg)){
-        const diff=Math.abs(cand - midi);
-        if (diff<bestDiff){ bestDiff=diff; best=cand; }
-      }
-    }
-    const qMidi = best ?? Math.round(midi);
-    return 440*Math.pow(2,(qMidi-69)/12);
-  }
+  const scale = SCALES[mode] || null;
+  if (!scale) return freq;
 
-  // ======== Pętla renderu ========
-  const canvas = document.getElementById('canvas');
-  const ctx = canvas.getContext('2d');
-
-  function drawViz(){
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    ctx.fillStyle='#031017'; ctx.fillRect(0,0,canvas.width,canvas.height);
-
-    // pasek częstotliwości
-    const pmin=+pitchMinEl.value, pmax=+pitchMaxEl.value;
-    const curF = osc?osc.frequency.value:0;
-    const fx = linMap(curF,pmin,pmax,0,canvas.width);
-    ctx.fillStyle='#0f8'; ctx.fillRect(0,10,fx,18);
-    ctx.fillStyle='#9fb'; ctx.fillText('Freq: '+Math.round(curF)+' Hz', 6, 24);
-
-    // pasek gate (sustain level)
-    const g = gainEnv?gainEnv.gain.value:0;
-    const gx = linMap(g,0,1,0,canvas.width);
-    ctx.fillStyle = gate? '#1fe39a' : '#f84';
-    ctx.fillRect(0,40,gx,18);
-    ctx.fillStyle='#fca'; ctx.fillText('Env: '+g.toFixed(2),6,54);
-
-    // waveform
-    if (analyser){
-      let buffer = new Uint8Array(analyser.fftSize);
-      analyser.getByteTimeDomainData(buffer);
-      ctx.beginPath();
-      ctx.strokeStyle = '#6cf'; ctx.lineWidth=1;
-      const step = canvas.width / buffer.length;
-      for (let i=0;i<buffer.length;i++){
-        const v = buffer[i]/128.0; // 0..2
-        const y = 95 + (v-1)*40;
-        if (i===0) ctx.moveTo(0,y); else ctx.lineTo(i*step,y);
-      }
-      ctx.stroke();
+  const midi = 69 + 12*Math.log2(freq/440);
+  let bestMidi = Math.round(midi), bestDiff = 1e9;
+  // szukamy najbliższego stopnia skali w ±2 oktawach
+  for (let k=-24;k<=24;k++){
+    const cand = Math.round(midi)+k;
+    const deg = ((cand%12)+12)%12;
+    if (scale.includes(deg)){
+      const diff = Math.abs(cand - midi);
+      if (diff < bestDiff){ bestDiff=diff; bestMidi=cand; }
     }
   }
+  return 440*Math.pow(2,(bestMidi-69)/12);
+}
 
-  function loop(){
-    if (!running){ requestAnimationFrame(loop); return; }
-    if (!lastEvent){ requestAnimationFrame(loop); return; }
+// ===== Loop =====
+const canvas=document.getElementById('canvas'); const ctx=canvas.getContext('2d');
 
-    // odczyty
-    const pitchMin = +pitchMinEl.value, pitchMax=+pitchMaxEl.value;
-    smoothing = +smoothEl.value;
-    const pitchSource = pitchSourceEl.value;
-    const gainSource  = gainSourceEl.value;
-    const quant = quantizeEl.checked;
-    const scaleName = scaleEl.value;
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle='#031017'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  // pitch bar
+  const f = osc?osc.frequency.value:0;
+  const fx = linMap(f, +pitchMin.value, +pitchMax.value, 0, canvas.width);
+  ctx.fillStyle='#0f8'; ctx.fillRect(0,10,fx,18); ctx.fillStyle='#9fb'; ctx.fillText('Freq: '+Math.round(f)+' Hz',6,24);
+  // volume bar
+  ctx.fillStyle='#f84'; ctx.fillRect(0,40, volPos*canvas.width,18); ctx.fillStyle='#ffd2b0'; ctx.fillText('Vol: '+volPos.toFixed(2),6,54);
+  // env level
+  const e = env?env.gain.value:0;
+  ctx.fillStyle='#6cf'; ctx.fillRect(0,70, e*canvas.width,10);
+}
 
-    // pitch source
-    let pitchVal=0;
-    if (pitchSource==='gamma') pitchVal = (lastEvent.gamma??0) - neutral.gamma;
-    else if (pitchSource==='beta') pitchVal = (lastEvent.beta??0) - neutral.beta;
-    else if (pitchSource==='accelX') pitchVal = (lastEvent.accelX??0) - neutral.accelX;
+function step(ts){
+  if (!running){ requestAnimationFrame(step); return; }
 
-    // gain source (używane też do automatycznego gate)
-    let gSrc=0;
-    if (gainSource==='accelMag'){
-      const nMag = Math.sqrt(neutral.accelX**2 + neutral.accelY**2 + neutral.accelZ**2);
-      gSrc = (lastEvent.accelMag??0) - nMag;
-    } else if (gainSource==='accelY'){
-      gSrc = (lastEvent.accelY??0) - neutral.accelY;
-    } else if (gainSource==='beta'){
-      gSrc = (lastEvent.beta??0) - neutral.beta;
-    }
+  // dt
+  if (lastTs==null) lastTs=ts; const dt = Math.min(0.05, Math.max(0.001,(ts-lastTs)/1000)); lastTs=ts;
 
-    // pitch map
-    let pitchNorm = 0.5;
-    if (pitchSource.startsWith('accel')) pitchNorm = linMap(pitchVal,-6,6,0,1);
-    else pitchNorm = linMap(pitchVal,-60,60,0,1);
+  // ===== PITCH: z β (unoszenie/pochylenie) =====
+  const betaRel = (beta - neutral.beta);        // deg
+  let freq = linMap(betaRel, -60, 60, +pitchMin.value, +pitchMax.value);
+  if (quantize.checked) freq = quantizeFreq(freq, scale.value);
+  if (osc) osc.frequency.setTargetAtTime(freq, audio.currentTime, 0.02);
 
-    let freq = linMap(pitchNorm,0,1,pitchMin,pitchMax);
-    if (quant && scaleName!=='none') freq = quantizeFreq(freq, scaleName);
+  // ===== VOLUME: z integracji accelX (↔) =====
+  const axRel = (ax - neutral.ax);
+  volPos = volPos*volDecay + (axRel*volSens*dt); // prawo ↑, lewo ↓
+  volPos = clamp(volPos, 0, 1);
+  if (volGain) volGain.gain.setTargetAtTime(volPos, audio.currentTime, 0.03);
 
-    // smoothing
-    if (smoothedPitch==null) smoothedPitch=freq;
-    smoothedPitch = smoothedPitch*smoothing + freq*(1-smoothing);
+  // ===== REVERB/SPACE: z γ (obrót nadgarstka) =====
+  const gammaRel = (gamma - neutral.gamma); // deg
+  // map γ -70..+70 → wet 0..wetMax, delay 0.08..dlyMax
+  const wet = linMap(gammaRel, -70, 70, 0, +wetMax.value);
+  const dly = linMap(Math.abs(gammaRel), 0, 70, 0.08, +dlyMax.value);
+  if (wetGain)  wetGain.gain.setTargetAtTime(wet, audio.currentTime, 0.05);
+  if (delay)    delay.delayTime.setTargetAtTime(dly, audio.currentTime, 0.05);
 
-    if (osc) osc.frequency.setTargetAtTime(smoothedPitch, audioCtx.currentTime, 0.02);
-
-    // AUTO GATE na podstawie ruchu
-    if (gateMode==='motion'){
-      const thresh = +motionThreshEl.value;
-      const level = Math.min(1, Math.max(0, Math.abs(gSrc))); // surowy poziom ruchu
-      const isMoving = level > thresh;
-      if (isMoving && !gate){ gate=true; setGateVisual(true); gateOn(1.0); }
-      else if (!isMoving && gate){ gate=false; setGateVisual(false); gateOff(); }
-    }
-
-    // odczyty
-    pitchRead.textContent = Math.round(smoothedPitch);
-    gainRead.textContent = (gainEnv?gainEnv.gain.value:0).toFixed(2);
-    gammaRead.textContent = (lastEvent.gamma??0).toFixed(1);
-    betaRead.textContent  = (lastEvent.beta??0).toFixed(1);
-    accelMagRead.textContent = (lastEvent.accelMag??0).toFixed(2);
-
-    drawViz();
-    requestAnimationFrame(loop);
+  // ===== Auto-gate z ruchu (opcjonalnie) =====
+  if (autoGate.checked){
+    const moveLevel = Math.abs(axRel) + Math.abs(ay - neutral.ay)*0.5 + Math.abs(az - neutral.az)*0.2;
+    const isOn = moveLevel > +motionThresh.value;
+    if (isOn && !gate) setGate(true);
+    else if (!isOn && gate) setGate(false);
   }
-  running=true; requestAnimationFrame(loop);
 
-  // resume po powrocie
-  document.addEventListener('visibilitychange', async ()=>{
-    if (audioCtx && audioCtx.state==='suspended' && document.visibilityState==='visible'){
-      try{ await audioCtx.resume(); status('audio resumed'); }catch(e){}
-    }
-  });
+  // reads
+  pitchRead.textContent = Math.round(freq);
+  volRead.textContent = volPos.toFixed(2);
+  betaRead.textContent = (beta).toFixed(1);
+  gammaRead.textContent = (gamma).toFixed(1);
+  axRead.textContent = (ax).toFixed(2);
+
+  draw();
+  requestAnimationFrame(step);
+}
+requestAnimationFrame(step);
+
+// ===== Buttons =====
+document.addEventListener('visibilitychange', async()=>{
+  if(audio && audio.state==='suspended' && document.visibilityState==='visible'){ try{ await audio.resume(); }catch(e){} }
+});
+btnAudio.click(); // auto-arming: pozwala szybko włączyć po otwarciu (Safari i tak wymaga tapu)
 })();
 </script>
 </body>
