@@ -3,22 +3,25 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Theremin — Tryb Kątowy & Klasyczny (fix orientacji)</title>
+<title>Theremin — Tryb kątowy (beta→volume, gamma→pitch) ze skalami i progami głośności</title>
 <style>
   :root{--bg:#0e1117;--panel:#0a1420;--fg:#e6eef8;--mut:#9fb;--neon:#39ffc3;--neon2:#7ee1ff;}
-  *{box-sizing:border-box} body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--fg);margin:0;padding:12px}
+  *{box-sizing:border-box}
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--fg);margin:0;padding:12px}
   h1{font-size:18px;margin:0 0 10px}
   .box{background:var(--panel);border:1px solid #22364f;border-radius:12px;padding:10px;margin:8px 0}
   .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0}
   label{min-width:110px;font-size:13px}
   input[type=range],input[type=number],select{background:#142233;border:1px solid #2a3d55;color:var(--fg);border-radius:8px;padding:8px}
-  .value{min-width:66px;text-align:center}.mut{color:var(--mut);font-size:12px}
+  .value{min-width:66px;text-align:center}
+  .mut{color:var(--mut);font-size:12px}
   .btn{position:relative;padding:10px 14px;border:1px solid #2a3d55;border-radius:10px;background:#101c2a;color:#dff;cursor:pointer;transition:transform .04s,box-shadow .15s,border-color .15s}
   .btn:active{transform:translateY(1px)}
   .btn.neon.on{border-color:#1a6;box-shadow:0 0 8px rgba(57,255,195,.7),0 0 16px rgba(57,255,195,.45),inset 0 0 8px rgba(57,255,195,.25);color:#eafff7}
   .btn.neon.alt.on{border-color:#29a;box-shadow:0 0 8px rgba(126,225,255,.7),0 0 16px rgba(126,225,255,.45),inset 0 0 8px rgba(126,225,255,.25);color:#f2fbff}
   .chip{display:inline-block;padding:2px 10px;border-radius:12px;border:1px solid #2a3d55;font-size:12px}
-  .chip.on{background:#0c281c;color:#93f7cc;border-color:#208d64}.chip.off{background:#2a1410;color:#ffcdb1;border-color:#8d4b20}
+  .chip.on{background:#0c281c;color:#93f7cc;border-color:#208d64}
+  .chip.off{background:#2a1410;color:#ffcdb1;border-color:#8d4b20}
   #scope{width:100%;height:160px;background:#06111a;border-radius:10px}
   .bar{height:12px;background:#0b1826;border:1px solid #24364f;border-radius:999px;overflow:hidden}
   .bar>div{height:100%;width:0%;background:linear-gradient(90deg,var(--neon),var(--neon2))}
@@ -26,21 +29,20 @@
 </style>
 </head>
 <body>
-<h1>Theremin — Tryb Kątowy & Klasyczny</h1>
+<h1>Theremin — Tryb kątowy</h1>
 
+<!-- GÓRNY PANEL: przyciski, sensory -->
 <div class="box">
   <div class="row">
     <button id="btnAudio" class="btn neon">Audio</button>
     <button id="btnSensors" class="btn neon alt">Czujniki</button>
     <button id="btnNote" class="btn neon alt">NOTE ON</button>
+    <button id="btnRetrig" class="btn">Retrigger ADSR</button>
     <span id="gateChip" class="chip off">gate: OFF</span>
-    <label style="margin-left:10px">Tryb</label>
-    <label><input type="radio" name="mode" value="angular" checked> Kątowy</label>
-    <label><input type="radio" name="mode" value="classic"> Klasyczny</label>
   </div>
   <div class="mut">
-    Kątowy: <b>beta</b> (pochyl do siebie) → głośność: płasko=MAX, prawie pion=0 • <b>gamma</b> (w bok) → wysokość (lewo↓, prawo↑).<br>
-    Klasyczny: Y→pitch, X→volume, Z poza strefą→mute (zostawiamy na potem).
+    <b>Kątowy:</b> β (pochyl do siebie) → głośność, γ (w bok) → wysokość.  
+    Płasko (β≈0°) = MAX volume, większe odchylenie ku pionowi → ciszej (0 przy zadanym kącie).
   </div>
   <div class="row mut">
     <span id="dmAvail">DeviceMotion: —</span> · <span id="doAvail">DeviceOrientation: —</span> ·
@@ -49,21 +51,25 @@
   </div>
 </div>
 
+<!-- WIZUALIZACJE: scope + paski -->
 <div class="box">
   <canvas id="scope" width="960" height="160"></canvas>
   <div class="grid" style="margin-top:8px">
     <div>Pitch (Hz)</div><div class="bar"><div id="barPitch"></div></div><div id="pitchRead" class="value">—</div>
     <div>Volume</div><div class="bar"><div id="barVol"></div></div><div id="volRead" class="value">—</div>
+    <div>Envelope</div><div class="bar"><div id="barEnv"></div></div><div id="envRead" class="value">—</div>
     <div>β tilt</div><div class="bar"><div id="barBeta"></div></div><div id="betaRead" class="value">—</div>
     <div>γ tilt</div><div class="bar"><div id="barGamma"></div></div><div id="gammaRead" class="value">—</div>
   </div>
 </div>
 
+<!-- USTAWIENIA -->
 <div class="box">
   <div class="row">
     <label>Oscylator</label>
     <select id="oscType">
-      <option value="sine">sine</option><option value="triangle">triangle</option><option value="square">square</option><option value="sawtooth">sawtooth</option>
+      <option value="sine">sine</option><option value="triangle">triangle</option>
+      <option value="square">square</option><option value="sawtooth">sawtooth</option>
     </select>
     <label style="margin-left:10px">Master gain</label>
     <input id="gainMax" type="number" value="0.90" step="0.05" style="width:80px">
@@ -71,51 +77,53 @@
     <input id="smooth" type="range" min="0" max="0.98" step="0.01" value="0.90"><span id="smoothVal" class="value">0.90</span>
   </div>
   <div class="row">
-    <label>Quantize</label><input id="quantize" type="checkbox">
+    <label>Skala</label>
     <select id="scale">
-      <option value="none">Brak</option><option value="major">Dur</option><option value="minor">Mol nat.</option><option value="pent">Pentatonic</option>
+      <option value="none">Brak</option>
+      <option value="pent">Pentatonic</option>
+      <option value="minor">Mol (naturalna)</option>
+      <option value="major">Dur</option>
     </select>
     <label style="margin-left:10px">Pitch min/max (Hz)</label>
     <input id="pitchMin" type="number" value="150" style="width:90px"> —
     <input id="pitchMax" type="number" value="2200" style="width:90px">
   </div>
+  <div class="row">
+    <label>β dla Volume MAX (°)</label><input id="betaMaxVol" type="number" value="0" step="1" style="width:80px">
+    <label>β dla Volume 0 (°)</label><input id="betaZeroVol" type="number" value="80" step="1" style="width:80px">
+    <label>Absolutna β</label><input id="betaAbs" type="checkbox" checked>
+  </div>
 </div>
 
+<!-- ADSR -->
 <div class="box">
   <div style="font-weight:600;margin-bottom:4px">ADSR</div>
   <div class="row">
-    <label>Attack (s)</label><input id="att" type="range" min="0" max="2" step="0.01" value="0.04"><span id="attVal" class="value">0.04</span>
-    <label>Decay (s)</label><input id="dec" type="range" min="0" max="2" step="0.01" value="0.15"><span id="decVal" class="value">0.15</span>
-    <label>Sustain</label><input id="sus" type="range" min="0" max="1" step="0.01" value="0.75"><span id="susVal" class="value">0.75</span>
-    <label>Release (s)</label><input id="rel" type="range" min="0" max="3" step="0.01" value="0.30"><span id="relVal" class="value">0.30</span>
+    <label>Attack (s)</label><input id="att" type="range" min="0" max="2" step="0.01" value="0.05"><span id="attVal" class="value">0.05</span>
+    <label>Decay (s)</label><input id="dec" type="range" min="0" max="2" step="0.01" value="0.20"><span id="decVal" class="value">0.20</span>
+    <label>Sustain</label><input id="sus" type="range" min="0" max="1" step="0.01" value="0.70"><span id="susVal" class="value">0.70</span>
+    <label>Release (s)</label><input id="rel" type="range" min="0" max="3" step="0.01" value="0.40"><span id="relVal" class="value">0.40</span>
   </div>
-</div>
-
-<!-- Panel „Klasyczny” zostawiam (niewymagany do testu kątowego) -->
-<div class="box" style="display:none">
-  <div style="font-weight:600;margin-bottom:4px">Tryb Klasyczny — zakresy</div>
-  <div class="row">
-    X: ±<input id="rangeX" type="number" step="0.01" value="0.25" style="width:80px"> m ·
-    Y: <input id="rangeY" type="number" step="0.01" value="0.60" style="width:80px"> m ·
-    Z: <input id="rangeZ" type="number" step="0.01" value="0.15" style="width:80px"> m
-  </div>
+  <div class="mut">Uwaga: ADSR słychać przy zdarzeniu NOTE ON/OFF (zmiana suwaków w trakcie trwającej nuty nie „przełączy” obwiedni – użyj <b>Retrigger ADSR</b> by natychmiast usłyszeć nową odpowiedź).</div>
 </div>
 
 <script>
 (()=>{
-// ---- helpers ----
+// ===== helpers =====
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const lerp=(a,b,t)=>a+(b-a)*t;
 const linMap=(x,a,b,c,d)=>{ if(a===b) return (c+d)/2; let t=(x-a)/(b-a); t=clamp(t,0,1); return c+t*(d-c); };
 
-// ---- audio ----
-let audio,osc,env,volGain,masterGain,analyser,running=false,gate=false;
+// ===== audio graph =====
+let audio, osc, env, volGain, masterGain, analyser;
+let running=false, gate=false;
+
 function initAudio(){
   if (audio) return;
   audio=new (window.AudioContext||window.webkitAudioContext)();
   osc=audio.createOscillator(); osc.type=oscType.value; osc.frequency.value=440;
-  env=audio.createGain(); env.gain.value=0;
-  volGain=audio.createGain(); volGain.gain.value=0;
+  env=audio.createGain(); env.gain.value=0;                 // ADSR (1.0 → pełna obwiednia)
+  volGain=audio.createGain(); volGain.gain.value=0;         // głośność z beta/gamma
   masterGain=audio.createGain(); masterGain.gain.value=parseFloat(gainMax.value);
   analyser=audio.createAnalyser(); analyser.fftSize=1024;
   osc.connect(env); env.connect(volGain); volGain.connect(masterGain);
@@ -124,16 +132,21 @@ function initAudio(){
   oscType.addEventListener('change',()=>{ osc.type=oscType.value; });
   gainMax.addEventListener('input',()=> masterGain.gain.value=parseFloat(gainMax.value));
 }
-function gateOn(){ if(!audio) return;
+
+function gateOn(){
+  if(!audio) return;
   const now=audio.currentTime, A=+att.value, D=+dec.value, S=+sus.value;
-  env.gain.cancelScheduledValues(now); env.gain.setValueAtTime(env.gain.value, now);
-  env.gain.linearRampToValueAtTime(1.0, now+A);
-  env.gain.linearRampToValueAtTime(S,   now+A+D);
+  env.gain.cancelScheduledValues(now);
+  env.gain.setValueAtTime(env.gain.value, now);
+  env.gain.linearRampToValueAtTime(1.0, now + A);
+  env.gain.linearRampToValueAtTime(S,   now + A + D);
 }
-function gateOff(){ if(!audio) return;
+function gateOff(){
+  if(!audio) return;
   const now=audio.currentTime, R=+rel.value;
-  env.gain.cancelScheduledValues(now); env.gain.setValueAtTime(env.gain.value, now);
-  env.gain.linearRampToValueAtTime(0.0, now+R);
+  env.gain.cancelScheduledValues(now);
+  env.gain.setValueAtTime(env.gain.value, now);
+  env.gain.linearRampToValueAtTime(0.0, now + R);
 }
 function setGate(on){
   gate=!!on;
@@ -144,39 +157,48 @@ function setGate(on){
   if(gate) gateOn(); else gateOff();
 }
 
-// ---- DOM ----
+// ===== DOM =====
 const btnAudio=document.getElementById('btnAudio');
 const btnSensors=document.getElementById('btnSensors');
 const btnNote=document.getElementById('btnNote');
+const btnRetrig=document.getElementById('btnRetrig');
 const gateChip=document.getElementById('gateChip');
+
 const oscType=document.getElementById('oscType');
 const gainMax=document.getElementById('gainMax');
 const smooth=document.getElementById('smooth'); const smoothVal=document.getElementById('smoothVal');
 smooth.addEventListener('input',()=> smoothVal.textContent=(+smooth.value).toFixed(2));
+
 const pitchMin=document.getElementById('pitchMin'); const pitchMax=document.getElementById('pitchMax');
-const quantize=document.getElementById('quantize'); const scale=document.getElementById('scale');
+const scale=document.getElementById('scale');
+
+const betaMaxVol=document.getElementById('betaMaxVol');
+const betaZeroVol=document.getElementById('betaZeroVol');
+const betaAbs=document.getElementById('betaAbs');
+
 const dmAvail=document.getElementById('dmAvail'); const doAvail=document.getElementById('doAvail');
 const betaVal=document.getElementById('betaVal'); const gammaVal=document.getElementById('gammaVal'); const alphaVal=document.getElementById('alphaVal');
 const axVal=document.getElementById('axVal'); const ayVal=document.getElementById('ayVal'); const azVal=document.getElementById('azVal');
+
 const scope=document.getElementById('scope'); const sctx=scope.getContext('2d');
 const barPitch=document.getElementById('barPitch'); const barVol=document.getElementById('barVol');
+const barEnv=document.getElementById('barEnv');
 const barBeta=document.getElementById('barBeta'); const barGamma=document.getElementById('barGamma');
-const pitchRead=document.getElementById('pitchRead'); const volRead=document.getElementById('volRead');
+const pitchRead=document.getElementById('pitchRead'); const volRead=document.getElementById('volRead'); const envRead=document.getElementById('envRead');
 const betaRead=document.getElementById('betaRead'); const gammaRead=document.getElementById('gammaRead');
-const modeRadios=[...document.querySelectorAll('input[name="mode"]')];
 
-// ---- sensors ----
+// ===== sensors =====
 dmAvail.textContent='DeviceMotion: ' + (typeof DeviceMotionEvent!=='undefined' ? 'OK' : 'brak');
 doAvail.textContent='DeviceOrientation: ' + (typeof DeviceOrientationEvent!=='undefined' ? 'OK' : 'brak');
 
 let sensorsOn=false;
 let beta=NaN, gamma=NaN, alpha=NaN;
-let agx=0,agy=0,agz=0; // includingGravity
+let agx=0, agy=0, agz=0;
 
 function handleDO(e){
-  if (typeof e.beta === 'number') beta = e.beta;
-  if (typeof e.gamma=== 'number') gamma= e.gamma;
-  if (typeof e.alpha=== 'number') alpha= e.alpha;
+  if (typeof e.beta==='number')  beta=e.beta;
+  if (typeof e.gamma==='number') gamma=e.gamma;
+  if (typeof e.alpha==='number') alpha=e.alpha;
   betaVal.textContent=isFinite(beta)?beta.toFixed(1):'—';
   gammaVal.textContent=isFinite(gamma)?gamma.toFixed(1):'—';
   alphaVal.textContent=isFinite(alpha)?alpha.toFixed(1):'—';
@@ -189,10 +211,8 @@ async function enableSensors(){
       try{ await DeviceOrientationEvent.requestPermission(); }catch(_){}
     }
   }catch(_){}
-  // orientation (both variants)
   window.addEventListener('deviceorientation', handleDO, true);
   window.addEventListener('deviceorientationabsolute', handleDO, true);
-  // motion (to mieć gravity fallback)
   window.addEventListener('devicemotion', e=>{
     const ai = e.accelerationIncludingGravity || {x:0,y:0,z:0};
     agx = ai.x||0; agy = ai.y||0; agz = ai.z||0;
@@ -200,46 +220,52 @@ async function enableSensors(){
   }, true);
 
   sensorsOn=true; btnSensors.classList.toggle('on',true);
-
-  // jeśli po 800 ms nie ma β/γ → włącz fallback z grawitacji
   setTimeout(()=>{ if(!isFinite(beta) || !isFinite(gamma)) useGravityFallback=true; }, 800);
 }
 btnSensors.onclick=()=>{ if(!sensorsOn) enableSensors(); };
 
-// Gravity → pseudo beta/gamma (fallback)
+// Gravity fallback
 let useGravityFallback=false;
 function computeTiltFromGravity(){
-  // normalizacja
   const g = Math.sqrt(agx*agx+agy*agy+agz*agz)||1;
   const nx=agx/g, ny=agy/g, nz=agz/g;
-  // Przybliżenie (w stopniach):
-  // beta ~ przechył „przód-tył”: 0 = płasko ekranem do góry, +90 = pion w górę
-  const betaDeg = Math.atan2(-nx, Math.sqrt(ny*ny + nz*nz)) * 180/Math.PI;
-  // gamma ~ przechył „lewo-prawo”: -90..+90
-  const gammaDeg = Math.atan2(ny, nz) * 180/Math.PI;
+  const betaDeg  = Math.atan2(-nx, Math.sqrt(ny*ny + nz*nz)) * 180/Math.PI; // przód-tył
+  const gammaDeg = Math.atan2(ny, nz) * 180/Math.PI;                        // lewo-prawo
   if (!isFinite(beta))  beta  = betaDeg;
   if (!isFinite(gamma)) gamma = gammaDeg;
   betaVal.textContent=isFinite(beta)?beta.toFixed(1):'—';
   gammaVal.textContent=isFinite(gamma)?gamma.toFixed(1):'—';
 }
 
-// ---- mappings ----
+// ===== pitch/volume mapping (kątowy) =====
 function mapAngular(){
   if (useGravityFallback) computeTiltFromGravity();
-  // β: 0° → vol 1, |β|→90° → vol 0
-  const b = clamp(Math.abs(beta||0), 0, 90);
-  const vol = 1 - b/90;
 
-  // γ: -70..+70 → min..max
+  // Volume z beta: definiowane dwoma kątami progowymi
+  const bRaw = beta||0;
+  const b = betaAbs.checked ? Math.abs(bRaw) : bRaw; // opcjonalnie symetrycznie
+  const bMax = +betaMaxVol.value; // kąt (°) dla volume=1
+  const bZero= +betaZeroVol.value; // kąt (°) dla volume=0
+  let vol;
+  if (b <= Math.min(bMax,bZero)) vol = 1;
+  else if (b >= Math.max(bMax,bZero)) vol = 0;
+  else vol = 1 - (b - bMax) / (bZero - bMax);
+  vol = clamp(vol, 0, 1);
+
+  // Pitch z gamma: -70..+70 → min..max
   const g = clamp(gamma||0, -70, 70);
   let freq = linMap(g, -70, 70, +pitchMin.value, +pitchMax.value);
-  // quantize
-  if(quantize.checked && scale.value!=='none'){
-    const S={major:[0,2,4,5,7,9,11], minor:[0,2,3,5,7,8,10], pent:[0,2,4,7,9]};
-    const sc=S[scale.value];
+
+  // Kwantyzacja do wybranej skali
+  const scName = scale.value;
+  if (scName!=='none'){
+    const SCALES={major:[0,2,4,5,7,9,11], minor:[0,2,3,5,7,8,10], pent:[0,2,4,7,9]};
+    const sc = SCALES[scName];
     if(sc){
-      const midi=69+12*Math.log2(freq/440); let best=Math.round(midi),bestD=1e9;
-      for(let k=-24;k<=24;k++){ const cand=Math.round(midi)+k, deg=((cand%12)+12)%12;
+      const midi=69+12*Math.log2(freq/440);
+      let best=Math.round(midi),bestD=1e9;
+      for(let k=-36;k<=36;k++){
+        const cand=Math.round(midi)+k, deg=((cand%12)+12)%12;
         if(sc.includes(deg)){ const d=Math.abs(cand-midi); if(d<bestD){bestD=d;best=cand;} }
       }
       freq = 440*Math.pow(2,(best-69)/12);
@@ -248,21 +274,7 @@ function mapAngular(){
   return {freq, vol};
 }
 
-// (zostawiony prosty classic dla kompletności)
-let posX=0,posY=0,posZ=0, velX=0,velY=0,velZ=0; // niewykorzystywane teraz
-function stepClassic(dt){ return {freq:+pitchMin.value, vol:0}; }
-
-// ---- UI ----
-btnAudio.onclick = async ()=>{
-  initAudio();
-  if (audio.state==='suspended') await audio.resume();
-  running=!running;
-  btnAudio.classList.toggle('on', running);
-  if(!running) setGate(false);
-};
-btnNote.onclick = ()=> setGate(!gate);
-
-// ---- draw ----
+// ===== scope + bars =====
 function drawScope(){
   sctx.clearRect(0,0,scope.width,scope.height);
   sctx.fillStyle='#031017'; sctx.fillRect(0,0,scope.width,scope.height);
@@ -271,37 +283,60 @@ function drawScope(){
     analyser.getByteTimeDomainData(buf);
     sctx.beginPath(); sctx.strokeStyle='#6cf'; sctx.lineWidth=1;
     const step=scope.width/buf.length;
-    for(let i=0;i<buf.length;i++){ const v=buf[i]/128.0, y=80+(v-1)*55;
-      if(i===0) sctx.moveTo(0,y); else sctx.lineTo(i*step,y); }
-    sctx.stroke();
+    for(let i=0;i<buf.length;i++){
+      const v=buf[i]/128.0, y=80+(v-1)*55;
+      if(i===0) sctx.moveTo(0,y); else sctx.lineTo(i*step,y);
+    } sctx.stroke();
   }
 }
 function setBar(el, pct){ el.style.width = clamp(pct,0,100)+'%'; }
 
-// ---- loop ----
+// ===== UI actions =====
+btnAudio.onclick = async ()=>{
+  initAudio();
+  if (audio.state==='suspended') await audio.resume();
+  running=!running;
+  btnAudio.classList.toggle('on', running);
+  if(!running) setGate(false);
+};
+btnNote.onclick = ()=> setGate(!gate);
+btnRetrig.onclick = ()=>{
+  if(!running){ initAudio(); running=true; btnAudio.classList.add('on'); }
+  // Krótko wyłącz i włącz gate by usłyszeć aktualny ADSR
+  setGate(false);
+  setTimeout(()=>setGate(true), 30);
+};
+
+// ===== loop =====
 let lastT=null, smoothPitch=null;
 function loop(ts){
   if (running){
     if (lastT==null) lastT=ts; const dt=Math.min(0.05, Math.max(0.001,(ts-lastT)/1000)); lastT=ts;
 
-    const mode = document.querySelector('input[name="mode"]:checked').value;
-    const out = (mode==='angular') ? mapAngular() : stepClassic(dt);
-    let {freq, vol} = out;
+    let {freq, vol} = mapAngular();
 
+    // smoothing
     const s=+smooth.value; if (smoothPitch==null) smoothPitch=freq;
     smoothPitch = smoothPitch*s + freq*(1-s);
 
+    // audio
     if (osc)  osc.frequency.setTargetAtTime(smoothPitch, audio.currentTime, 0.02);
     if (volGain) volGain.gain.setTargetAtTime(vol, audio.currentTime, 0.03);
 
+    // wskaźniki
     pitchRead.textContent = Math.round(smoothPitch);
     volRead.textContent = vol.toFixed(2);
+    // odczyt env (przybliżenie: pobieramy bieżącą wartość targetu)
+    if (env){
+      const g = env.gain.value; envRead.textContent = g.toFixed(2);
+      setBar(barEnv, g*100);
+    }
     betaRead.textContent = isFinite(beta)?beta.toFixed(1):'—';
     gammaRead.textContent = isFinite(gamma)?gamma.toFixed(1):'—';
-
     const pPct = linMap(smoothPitch, +pitchMin.value, +pitchMax.value, 0, 100);
     setBar(barPitch, pPct); setBar(barVol, vol*100);
-    setBar(barBeta, (1 - Math.min(90, Math.abs(beta||0))/90)*100);
+    const bVis = betaAbs.checked ? Math.abs(beta||0) : (beta||0);
+    setBar(barBeta, linMap(bVis, +betaMaxVol.value, +betaZeroVol.value, 100, 0));
     setBar(barGamma, linMap(gamma||0, -70, 70, 0, 100));
 
     drawScope();
@@ -310,7 +345,7 @@ function loop(ts){
 }
 requestAnimationFrame(loop);
 
-// resume
+// resume audio po powrocie
 document.addEventListener('visibilitychange', async ()=>{
   if (audio && audio.state==='suspended' && document.visibilityState==='visible'){ try{ await audio.resume(); }catch(_){ } }
 });
