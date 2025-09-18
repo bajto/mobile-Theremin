@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Theremin — Tryb kątowy (beta→volume, gamma→pitch) ze skalami i progami głośności</title>
+<title>Theremin — kątowy z kwantyzacją (root + snap)</title>
 <style>
   :root{--bg:#0e1117;--panel:#0a1420;--fg:#e6eef8;--mut:#9fb;--neon:#39ffc3;--neon2:#7ee1ff;}
   *{box-sizing:border-box}
@@ -26,12 +26,12 @@
   .bar{height:12px;background:#0b1826;border:1px solid #24364f;border-radius:999px;overflow:hidden}
   .bar>div{height:100%;width:0%;background:linear-gradient(90deg,var(--neon),var(--neon2))}
   .grid{display:grid;grid-template-columns:120px 1fr 68px;gap:8px;align-items:center}
+  .tag{font-size:10px;padding:2px 6px;border:1px solid #2a3d55;border-radius:999px;margin-left:6px;color:#bfe}
 </style>
 </head>
 <body>
-<h1>Theremin — Tryb kątowy</h1>
+<h1>Theremin — tryb kątowy</h1>
 
-<!-- GÓRNY PANEL: przyciski, sensory -->
 <div class="box">
   <div class="row">
     <button id="btnAudio" class="btn neon">Audio</button>
@@ -41,8 +41,8 @@
     <span id="gateChip" class="chip off">gate: OFF</span>
   </div>
   <div class="mut">
-    <b>Kątowy:</b> β (pochyl do siebie) → głośność, γ (w bok) → wysokość.  
-    Płasko (β≈0°) = MAX volume, większe odchylenie ku pionowi → ciszej (0 przy zadanym kącie).
+    β (pochyl do siebie) → głośność (płasko=MAX, bliżej pionu=0) · γ (w bok) → wysokość.  
+    Skale + root włączają „dociąganie” do dźwięków. „Snap” usuwa płynięcie.
   </div>
   <div class="row mut">
     <span id="dmAvail">DeviceMotion: —</span> · <span id="doAvail">DeviceOrientation: —</span> ·
@@ -51,11 +51,11 @@
   </div>
 </div>
 
-<!-- WIZUALIZACJE: scope + paski -->
 <div class="box">
   <canvas id="scope" width="960" height="160"></canvas>
   <div class="grid" style="margin-top:8px">
-    <div>Pitch (Hz)</div><div class="bar"><div id="barPitch"></div></div><div id="pitchRead" class="value">—</div>
+    <div>Pitch (Hz) <span id="qTag" class="tag" style="display:none">Q</span></div>
+    <div class="bar"><div id="barPitch"></div></div><div id="pitchRead" class="value">—</div>
     <div>Volume</div><div class="bar"><div id="barVol"></div></div><div id="volRead" class="value">—</div>
     <div>Envelope</div><div class="bar"><div id="barEnv"></div></div><div id="envRead" class="value">—</div>
     <div>β tilt</div><div class="bar"><div id="barBeta"></div></div><div id="betaRead" class="value">—</div>
@@ -63,7 +63,6 @@
   </div>
 </div>
 
-<!-- USTAWIENIA -->
 <div class="box">
   <div class="row">
     <label>Oscylator</label>
@@ -84,6 +83,11 @@
       <option value="minor">Mol (naturalna)</option>
       <option value="major">Dur</option>
     </select>
+    <label>Root</label>
+    <select id="root">
+      <option>C</option><option>C#</option><option>D</option><option>D#</option><option>E</option><option>F</option><option>F#</option><option>G</option><option>G#</option><option>A</option><option>A#</option><option>B</option>
+    </select>
+    <label>Snap</label><input id="snap" type="checkbox">
     <label style="margin-left:10px">Pitch min/max (Hz)</label>
     <input id="pitchMin" type="number" value="150" style="width:90px"> —
     <input id="pitchMax" type="number" value="2200" style="width:90px">
@@ -95,7 +99,6 @@
   </div>
 </div>
 
-<!-- ADSR -->
 <div class="box">
   <div style="font-weight:600;margin-bottom:4px">ADSR</div>
   <div class="row">
@@ -104,7 +107,7 @@
     <label>Sustain</label><input id="sus" type="range" min="0" max="1" step="0.01" value="0.70"><span id="susVal" class="value">0.70</span>
     <label>Release (s)</label><input id="rel" type="range" min="0" max="3" step="0.01" value="0.40"><span id="relVal" class="value">0.40</span>
   </div>
-  <div class="mut">Uwaga: ADSR słychać przy zdarzeniu NOTE ON/OFF (zmiana suwaków w trakcie trwającej nuty nie „przełączy” obwiedni – użyj <b>Retrigger ADSR</b> by natychmiast usłyszeć nową odpowiedź).</div>
+  <div class="mut">Po zmianie ADSR użyj „Retrigger ADSR”, by natychmiast usłyszeć nową obwiednię.</div>
 </div>
 
 <script>
@@ -114,7 +117,7 @@ const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const lerp=(a,b,t)=>a+(b-a)*t;
 const linMap=(x,a,b,c,d)=>{ if(a===b) return (c+d)/2; let t=(x-a)/(b-a); t=clamp(t,0,1); return c+t*(d-c); };
 
-// ===== audio graph =====
+// ===== audio =====
 let audio, osc, env, volGain, masterGain, analyser;
 let running=false, gate=false;
 
@@ -122,8 +125,8 @@ function initAudio(){
   if (audio) return;
   audio=new (window.AudioContext||window.webkitAudioContext)();
   osc=audio.createOscillator(); osc.type=oscType.value; osc.frequency.value=440;
-  env=audio.createGain(); env.gain.value=0;                 // ADSR (1.0 → pełna obwiednia)
-  volGain=audio.createGain(); volGain.gain.value=0;         // głośność z beta/gamma
+  env=audio.createGain(); env.gain.value=0;
+  volGain=audio.createGain(); volGain.gain.value=0;
   masterGain=audio.createGain(); masterGain.gain.value=parseFloat(gainMax.value);
   analyser=audio.createAnalyser(); analyser.fftSize=1024;
   osc.connect(env); env.connect(volGain); volGain.connect(masterGain);
@@ -132,21 +135,16 @@ function initAudio(){
   oscType.addEventListener('change',()=>{ osc.type=oscType.value; });
   gainMax.addEventListener('input',()=> masterGain.gain.value=parseFloat(gainMax.value));
 }
-
-function gateOn(){
-  if(!audio) return;
+function gateOn(){ if(!audio) return;
   const now=audio.currentTime, A=+att.value, D=+dec.value, S=+sus.value;
-  env.gain.cancelScheduledValues(now);
-  env.gain.setValueAtTime(env.gain.value, now);
-  env.gain.linearRampToValueAtTime(1.0, now + A);
-  env.gain.linearRampToValueAtTime(S,   now + A + D);
+  env.gain.cancelScheduledValues(now); env.gain.setValueAtTime(env.gain.value, now);
+  env.gain.linearRampToValueAtTime(1.0, now+A);
+  env.gain.linearRampToValueAtTime(S,   now+A+D);
 }
-function gateOff(){
-  if(!audio) return;
+function gateOff(){ if(!audio) return;
   const now=audio.currentTime, R=+rel.value;
-  env.gain.cancelScheduledValues(now);
-  env.gain.setValueAtTime(env.gain.value, now);
-  env.gain.linearRampToValueAtTime(0.0, now + R);
+  env.gain.cancelScheduledValues(now); env.gain.setValueAtTime(env.gain.value, now);
+  env.gain.linearRampToValueAtTime(0.0, now+R);
 }
 function setGate(on){
   gate=!!on;
@@ -170,7 +168,7 @@ const smooth=document.getElementById('smooth'); const smoothVal=document.getElem
 smooth.addEventListener('input',()=> smoothVal.textContent=(+smooth.value).toFixed(2));
 
 const pitchMin=document.getElementById('pitchMin'); const pitchMax=document.getElementById('pitchMax');
-const scale=document.getElementById('scale');
+const scaleSel=document.getElementById('scale'); const rootSel=document.getElementById('root'); const snap=document.getElementById('snap');
 
 const betaMaxVol=document.getElementById('betaMaxVol');
 const betaZeroVol=document.getElementById('betaZeroVol');
@@ -186,6 +184,7 @@ const barEnv=document.getElementById('barEnv');
 const barBeta=document.getElementById('barBeta'); const barGamma=document.getElementById('barGamma');
 const pitchRead=document.getElementById('pitchRead'); const volRead=document.getElementById('volRead'); const envRead=document.getElementById('envRead');
 const betaRead=document.getElementById('betaRead'); const gammaRead=document.getElementById('gammaRead');
+const qTag=document.getElementById('qTag');
 
 // ===== sensors =====
 dmAvail.textContent='DeviceMotion: ' + (typeof DeviceMotionEvent!=='undefined' ? 'OK' : 'brak');
@@ -206,7 +205,7 @@ function handleDO(e){
 async function enableSensors(){
   try{
     if (typeof DeviceMotionEvent!=='undefined' && typeof DeviceMotionEvent.requestPermission==='function'){
-      const ok=await DeviceMotionEvent.requestPermission(); /* iOS */ }
+      const ok=await DeviceMotionEvent.requestPermission(); }
     if (typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){
       try{ await DeviceOrientationEvent.requestPermission(); }catch(_){}
     }
@@ -218,13 +217,12 @@ async function enableSensors(){
     agx = ai.x||0; agy = ai.y||0; agz = ai.z||0;
     axVal.textContent=agx.toFixed(2); ayVal.textContent=agy.toFixed(2); azVal.textContent=agz.toFixed(2);
   }, true);
-
   sensorsOn=true; btnSensors.classList.toggle('on',true);
   setTimeout(()=>{ if(!isFinite(beta) || !isFinite(gamma)) useGravityFallback=true; }, 800);
 }
 btnSensors.onclick=()=>{ if(!sensorsOn) enableSensors(); };
 
-// Gravity fallback
+// grawitacyjny fallback
 let useGravityFallback=false;
 function computeTiltFromGravity(){
   const g = Math.sqrt(agx*agx+agy*agy+agz*agz)||1;
@@ -237,44 +235,52 @@ function computeTiltFromGravity(){
   gammaVal.textContent=isFinite(gamma)?gamma.toFixed(1):'—';
 }
 
-// ===== pitch/volume mapping (kątowy) =====
+// ===== muzyka: skale =====
+const NOTE_TO_SEMITONE={C:0,'C#':1,D:2,'D#':3,E:4,F:5,'F#':6,G:7,'G#':8,A:9,'A#':10,B:11};
+const SCALES={major:[0,2,4,5,7,9,11], minor:[0,2,3,5,7,8,10], pent:[0,2,4,7,9]};
+
+function quantizeFreqToScale(freq, rootName, scaleName){
+  const sc = SCALES[scaleName]; if(!sc) return freq;
+  const root = NOTE_TO_SEMITONE[rootName] ?? 0;
+  const midi = 69 + 12*Math.log2(freq/440);
+  // przesuń do „klucza” przez odjęcie root, kwantyzuj stopień, przywróć
+  let bestMidi = Math.round(midi), bestD=1e9;
+  for(let k=-48;k<=48;k++){
+    const cand = Math.round(midi)+k;
+    const deg = ((cand - root) % 12 + 12) % 12;
+    if (sc.includes(deg)){ const d=Math.abs(cand-midi); if(d<bestD){bestD=d; bestMidi=cand;} }
+  }
+  return 440*Math.pow(2,(bestMidi-69)/12);
+}
+
+// ===== mapowania kątowe =====
 function mapAngular(){
   if (useGravityFallback) computeTiltFromGravity();
 
-  // Volume z beta: definiowane dwoma kątami progowymi
+  // Volume z beta (dwa progi)
   const bRaw = beta||0;
-  const b = betaAbs.checked ? Math.abs(bRaw) : bRaw; // opcjonalnie symetrycznie
-  const bMax = +betaMaxVol.value; // kąt (°) dla volume=1
-  const bZero= +betaZeroVol.value; // kąt (°) dla volume=0
+  const b = betaAbs.checked ? Math.abs(bRaw) : bRaw;
+  const bMax = +betaMaxVol.value, bZero=+betaZeroVol.value;
   let vol;
   if (b <= Math.min(bMax,bZero)) vol = 1;
   else if (b >= Math.max(bMax,bZero)) vol = 0;
   else vol = 1 - (b - bMax) / (bZero - bMax);
-  vol = clamp(vol, 0, 1);
+  vol = clamp(vol,0,1);
 
-  // Pitch z gamma: -70..+70 → min..max
+  // Pitch z gamma
   const g = clamp(gamma||0, -70, 70);
   let freq = linMap(g, -70, 70, +pitchMin.value, +pitchMax.value);
 
-  // Kwantyzacja do wybranej skali
-  const scName = scale.value;
+  // Kwantyzacja (jeśli wybrano skalę)
+  const scName = scaleSel.value;
+  qTag.style.display = (scName!=='none') ? 'inline-block' : 'none';
   if (scName!=='none'){
-    const SCALES={major:[0,2,4,5,7,9,11], minor:[0,2,3,5,7,8,10], pent:[0,2,4,7,9]};
-    const sc = SCALES[scName];
-    if(sc){
-      const midi=69+12*Math.log2(freq/440);
-      let best=Math.round(midi),bestD=1e9;
-      for(let k=-36;k<=36;k++){
-        const cand=Math.round(midi)+k, deg=((cand%12)+12)%12;
-        if(sc.includes(deg)){ const d=Math.abs(cand-midi); if(d<bestD){bestD=d;best=cand;} }
-      }
-      freq = 440*Math.pow(2,(best-69)/12);
-    }
+    freq = quantizeFreqToScale(freq, rootSel.value, scName);
   }
   return {freq, vol};
 }
 
-// ===== scope + bars =====
+// ===== scope + UI =====
 function drawScope(){
   sctx.clearRect(0,0,scope.width,scope.height);
   sctx.fillStyle='#031017'; sctx.fillRect(0,0,scope.width,scope.height);
@@ -283,10 +289,9 @@ function drawScope(){
     analyser.getByteTimeDomainData(buf);
     sctx.beginPath(); sctx.strokeStyle='#6cf'; sctx.lineWidth=1;
     const step=scope.width/buf.length;
-    for(let i=0;i<buf.length;i++){
-      const v=buf[i]/128.0, y=80+(v-1)*55;
-      if(i===0) sctx.moveTo(0,y); else sctx.lineTo(i*step,y);
-    } sctx.stroke();
+    for(let i=0;i<buf.length;i++){ const v=buf[i]/128.0, y=80+(v-1)*55;
+      if(i===0) sctx.moveTo(0,y); else sctx.lineTo(i*step,y); }
+    sctx.stroke();
   }
 }
 function setBar(el, pct){ el.style.width = clamp(pct,0,100)+'%'; }
@@ -299,25 +304,36 @@ btnAudio.onclick = async ()=>{
   btnAudio.classList.toggle('on', running);
   if(!running) setGate(false);
 };
+btnSensors.onclick=()=>{ if(!sensorsOn) enableSensors(); };
 btnNote.onclick = ()=> setGate(!gate);
 btnRetrig.onclick = ()=>{
   if(!running){ initAudio(); running=true; btnAudio.classList.add('on'); }
-  // Krótko wyłącz i włącz gate by usłyszeć aktualny ADSR
-  setGate(false);
-  setTimeout(()=>setGate(true), 30);
+  setGate(false); setTimeout(()=>setGate(true), 30);
 };
 
-// ===== loop =====
-let lastT=null, smoothPitch=null;
+// po zmianie skali/root: natychmiastowy snap (i krótki retrigger, żeby było słychać)
+function snapNow(){
+  // wymuś jednorazowy „twardy” update pitcha
+  forceInstantSnap = true;
+  // lekki retrigger, żeby ADSR zagrał nową wysokość bez czekania
+  setGate(false); setTimeout(()=>setGate(true), 20);
+}
+scaleSel.addEventListener('change', snapNow);
+rootSel.addEventListener('change', snapNow);
+
+// ===== pętla =====
+let lastT=null, smoothPitch=null, forceInstantSnap=false;
 function loop(ts){
   if (running){
     if (lastT==null) lastT=ts; const dt=Math.min(0.05, Math.max(0.001,(ts-lastT)/1000)); lastT=ts;
 
     let {freq, vol} = mapAngular();
 
-    // smoothing
-    const s=+smooth.value; if (smoothPitch==null) smoothPitch=freq;
-    smoothPitch = smoothPitch*s + freq*(1-s);
+    // smoothing pitch (chyba że SNAP)
+    const s = snap.checked ? 0 : +smooth.value;
+    if (smoothPitch==null) smoothPitch=freq;
+    smoothPitch = forceInstantSnap ? freq : (smoothPitch*s + freq*(1-s));
+    forceInstantSnap=false;
 
     // audio
     if (osc)  osc.frequency.setTargetAtTime(smoothPitch, audio.currentTime, 0.02);
@@ -326,15 +342,11 @@ function loop(ts){
     // wskaźniki
     pitchRead.textContent = Math.round(smoothPitch);
     volRead.textContent = vol.toFixed(2);
-    // odczyt env (przybliżenie: pobieramy bieżącą wartość targetu)
-    if (env){
-      const g = env.gain.value; envRead.textContent = g.toFixed(2);
-      setBar(barEnv, g*100);
-    }
-    betaRead.textContent = isFinite(beta)?beta.toFixed(1):'—';
-    gammaRead.textContent = isFinite(gamma)?gamma.toFixed(1):'—';
+    if (env){ const g = env.gain.value; envRead.textContent=g.toFixed(2); setBar(barEnv, g*100); }
     const pPct = linMap(smoothPitch, +pitchMin.value, +pitchMax.value, 0, 100);
     setBar(barPitch, pPct); setBar(barVol, vol*100);
+    betaRead.textContent=isFinite(beta)?beta.toFixed(1):'—';
+    gammaRead.textContent=isFinite(gamma)?gamma.toFixed(1):'—';
     const bVis = betaAbs.checked ? Math.abs(beta||0) : (beta||0);
     setBar(barBeta, linMap(bVis, +betaMaxVol.value, +betaZeroVol.value, 100, 0));
     setBar(barGamma, linMap(gamma||0, -70, 70, 0, 100));
@@ -345,7 +357,7 @@ function loop(ts){
 }
 requestAnimationFrame(loop);
 
-// resume audio po powrocie
+// resume audio na powrocie
 document.addEventListener('visibilitychange', async ()=>{
   if (audio && audio.state==='suspended' && document.visibilityState==='visible'){ try{ await audio.resume(); }catch(_){ } }
 });
