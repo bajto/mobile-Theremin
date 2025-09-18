@@ -3,6 +3,343 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Theremin — Tryb Kątowy & Klasyczny (beta↔głośność, gamma↔pitch)</title>
+<style>
+  :root{--bg:#0e1117;--panel:#0a1420;--fg:#e6eef8;--mut:#9fb;--neon:#39ffc3;--neon2:#7ee1ff;}
+  *{box-sizing:border-box}
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--fg);margin:0;padding:12px}
+  h1{font-size:18px;margin:0 0 10px}
+  .box{background:var(--panel);border:1px solid #22364f;border-radius:12px;padding:10px;margin:8px 0}
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0}
+  label{min-width:110px;font-size:13px}
+  input[type=range],input[type=number],select{background:#142233;border:1px solid #2a3d55;color:var(--fg);border-radius:8px;padding:8px}
+  .value{min-width:66px;text-align:center}
+  .mut{color:var(--mut);font-size:12px}
+  .btn{position:relative;padding:10px 14px;border:1px solid #2a3d55;border-radius:10px;background:#101c2a;color:#dff;cursor:pointer;transition:transform .04s,box-shadow .15s,border-color .15s}
+  .btn:active{transform:translateY(1px)}
+  .btn.neon.on{border-color:#1a6;box-shadow:0 0 8px rgba(57,255,195,.7),0 0 16px rgba(57,255,195,.45),inset 0 0 8px rgba(57,255,195,.25);color:#eafff7}
+  .btn.neon.alt.on{border-color:#29a;box-shadow:0 0 8px rgba(126,225,255,.7),0 0 16px rgba(126,225,255,.45),inset 0 0 8px rgba(126,225,255,.25);color:#f2fbff}
+  .chip{display:inline-block;padding:2px 10px;border-radius:12px;border:1px solid #2a3d55;font-size:12px}
+  .chip.on{background:#0c281c;color:#93f7cc;border-color:#208d64}
+  .chip.off{background:#2a1410;color:#ffcdb1;border-color:#8d4b20}
+  /* Viz */
+  #scope{width:100%;height:160px;background:#06111a;border-radius:10px}
+  .bar{height:12px;background:#0b1826;border:1px solid #24364f;border-radius:999px;overflow:hidden}
+  .bar>div{height:100%;width:0%;background:linear-gradient(90deg,var(--neon),var(--neon2))}
+  .grid{display:grid;grid-template-columns:120px 1fr 68px;gap:8px;align-items:center}
+</style>
+</head>
+<body>
+<h1>Theremin — Tryb Kątowy & Klasyczny</h1>
+
+<!-- GÓRNY PANEL: przyciski, tryb, sensory -->
+<div class="box">
+  <div class="row">
+    <button id="btnAudio" class="btn neon">Audio</button>
+    <button id="btnSensors" class="btn neon alt">Czujniki</button>
+    <button id="btnNote" class="btn neon alt">NOTE ON</button>
+    <span id="gateChip" class="chip off">gate: OFF</span>
+    <label style="margin-left:10px">Tryb</label>
+    <label><input type="radio" name="mode" value="angular" checked> Kątowy</label>
+    <label><input type="radio" name="mode" value="classic"> Klasyczny</label>
+  </div>
+  <div class="mut">Kątowy: <b>beta</b> (pochylenie do siebie) → głośność (płasko max, pion 0), <b>gamma</b> (obrót w bok) → wysokość.<br>
+  Klasyczny: <b>Y</b> (góra/dół) → wysokość, <b>X</b> (lewo/prawo) → głośność, <b>Z</b> poza strefą → mute.</div>
+  <div class="row mut">
+    <span id="dmAvail">DeviceMotion: —</span> · <span id="doAvail">DeviceOrientation: —</span> ·
+    β: <span id="betaVal" class="value">—</span> γ: <span id="gammaVal" class="value">—</span> α: <span id="alphaVal" class="value">—</span> ·
+    ax: <span id="axVal" class="value">—</span> ay: <span id="ayVal" class="value">—</span> az: <span id="azVal" class="value">—</span>
+  </div>
+</div>
+
+<!-- WIZUALIZACJE: PIERWSZE -->
+<div class="box">
+  <canvas id="scope" width="960" height="160"></canvas>
+  <div class="grid" style="margin-top:8px">
+    <div>Pitch (Hz)</div><div class="bar"><div id="barPitch"></div></div><div id="pitchRead" class="value">—</div>
+    <div>Volume</div><div class="bar"><div id="barVol"></div></div><div id="volRead" class="value">—</div>
+    <div>β tilt</div><div class="bar"><div id="barBeta"></div></div><div id="betaRead" class="value">—</div>
+    <div>γ tilt</div><div class="bar"><div id="barGamma"></div></div><div id="gammaRead" class="value">—</div>
+  </div>
+</div>
+
+<!-- USTAWIENIA -->
+<div class="box">
+  <div class="row">
+    <label>Oscylator</label>
+    <select id="oscType">
+      <option value="sine">sine</option><option value="triangle">triangle</option>
+      <option value="square">square</option><option value="sawtooth">sawtooth</option>
+    </select>
+    <label style="margin-left:10px">Master gain</label>
+    <input id="gainMax" type="number" value="0.90" step="0.05" style="width:80px">
+    <label style="margin-left:10px">Smoothing</label>
+    <input id="smooth" type="range" min="0" max="0.98" step="0.01" value="0.90"><span id="smoothVal" class="value">0.90</span>
+  </div>
+  <div class="row">
+    <label>Quantize</label><input id="quantize" type="checkbox">
+    <select id="scale">
+      <option value="none">Brak</option><option value="major">Dur</option><option value="minor">Mol nat.</option><option value="pent">Pentatonic</option>
+    </select>
+    <label style="margin-left:10px">Pitch min/max (Hz)</label>
+    <input id="pitchMin" type="number" value="150" style="width:90px"> —
+    <input id="pitchMax" type="number" value="2200" style="width:90px">
+  </div>
+</div>
+
+<!-- ADSR -->
+<div class="box">
+  <div style="font-weight:600;margin-bottom:4px">ADSR</div>
+  <div class="row">
+    <label>Attack (s)</label><input id="att" type="range" min="0" max="2" step="0.01" value="0.04"><span id="attVal" class="value">0.04</span>
+    <label>Decay (s)</label><input id="dec" type="range" min="0" max="2" step="0.01" value="0.15"><span id="decVal" class="value">0.15</span>
+    <label>Sustain</label><input id="sus" type="range" min="0" max="1" step="0.01" value="0.75"><span id="susVal" class="value">0.75</span>
+    <label>Release (s)</label><input id="rel" type="range" min="0" max="3" step="0.01" value="0.30"><span id="relVal" class="value">0.30</span>
+  </div>
+</div>
+
+<!-- PARAMETRY TRYBU KLASYCZNEGO (poniżej) -->
+<div class="box">
+  <div style="font-weight:600;margin-bottom:4px">Tryb Klasyczny — zakresy i kalibracja</div>
+  <div class="row">
+    <button id="btnCalNeutral" class="btn">Kalibracja (neutral)</button>
+    <button id="btnWizard" class="btn neon">Kreator Z→Y→X</button>
+    <span class="mut">X: ±<input id="rangeX" type="number" step="0.01" value="0.25" style="width:80px"> m ·
+      Y: <input id="rangeY" type="number" step="0.01" value="0.60" style="width:80px"> m ·
+      Z: <input id="rangeZ" type="number" step="0.01" value="0.15" style="width:80px"> m</span>
+  </div>
+</div>
+
+<script>
+(()=>{
+// ===== helpers =====
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const linMap=(x,a,b,c,d)=>{ if(a===b) return (c+d)/2; let t=(x-a)/(b-a); t=clamp(t,0,1); return c+t*(d-c); };
+
+// ===== audio graph =====
+let audio, osc, env, volGain, masterGain, analyser;
+let running=false, gate=false;
+
+function initAudio(){
+  if (audio) return;
+  audio=new (window.AudioContext||window.webkitAudioContext)();
+  osc=audio.createOscillator(); osc.type=oscType.value; osc.frequency.value=440;
+  env=audio.createGain(); env.gain.value=0;
+  volGain=audio.createGain(); volGain.gain.value=0;
+  masterGain=audio.createGain(); masterGain.gain.value=parseFloat(gainMax.value);
+  analyser=audio.createAnalyser(); analyser.fftSize=1024;
+  osc.connect(env); env.connect(volGain); volGain.connect(masterGain);
+  masterGain.connect(analyser); analyser.connect(audio.destination);
+  osc.start();
+  oscType.addEventListener('change',()=>{ osc.type=oscType.value; });
+  gainMax.addEventListener('input',()=> masterGain.gain.value=parseFloat(gainMax.value));
+}
+function gateOn(){ if(!audio) return;
+  const now=audio.currentTime, A=+att.value, D=+dec.value, S=+sus.value;
+  env.gain.cancelScheduledValues(now); env.gain.setValueAtTime(env.gain.value, now);
+  env.gain.linearRampToValueAtTime(1.0, now+A);
+  env.gain.linearRampToValueAtTime(S,   now+A+D);
+}
+function gateOff(){ if(!audio) return;
+  const now=audio.currentTime, R=+rel.value;
+  env.gain.cancelScheduledValues(now); env.gain.setValueAtTime(env.gain.value, now);
+  env.gain.linearRampToValueAtTime(0.0, now+R);
+}
+function setGate(on){
+  gate=!!on;
+  gateChip.textContent='gate: '+(gate?'ON':'OFF');
+  gateChip.classList.toggle('on',gate); gateChip.classList.toggle('off',!gate);
+  btnNote.classList.toggle('on',gate);
+  btnNote.textContent = gate ? 'NOTE OFF' : 'NOTE ON';
+  if(gate) gateOn(); else gateOff();
+}
+
+// ===== DOM =====
+const btnAudio=document.getElementById('btnAudio');
+const btnSensors=document.getElementById('btnSensors');
+const btnNote=document.getElementById('btnNote');
+const gateChip=document.getElementById('gateChip');
+const oscType=document.getElementById('oscType');
+const gainMax=document.getElementById('gainMax');
+const smooth=document.getElementById('smooth'); const smoothVal=document.getElementById('smoothVal');
+[smooth].forEach(x=>x.addEventListener('input',()=>smoothVal.textContent=(+smooth.value).toFixed(2)));
+const pitchMin=document.getElementById('pitchMin'); const pitchMax=document.getElementById('pitchMax');
+const quantize=document.getElementById('quantize'); const scale=document.getElementById('scale');
+
+const dmAvail=document.getElementById('dmAvail'); const doAvail=document.getElementById('doAvail');
+const betaVal=document.getElementById('betaVal'); const gammaVal=document.getElementById('gammaVal'); const alphaVal=document.getElementById('alphaVal');
+const axVal=document.getElementById('axVal'); const ayVal=document.getElementById('ayVal'); const azVal=document.getElementById('azVal');
+
+const scope=document.getElementById('scope'); const sctx=scope.getContext('2d');
+const barPitch=document.getElementById('barPitch'); const barVol=document.getElementById('barVol');
+const barBeta=document.getElementById('barBeta'); const barGamma=document.getElementById('barGamma');
+const pitchRead=document.getElementById('pitchRead'); const volRead=document.getElementById('volRead');
+const betaRead=document.getElementById('betaRead'); const gammaRead=document.getElementById('gammaRead');
+
+const modeRadios=[...document.querySelectorAll('input[name="mode"]')];
+const btnCalNeutral=document.getElementById('btnCalNeutral');
+const btnWizard=document.getElementById('btnWizard');
+const rangeX=document.getElementById('rangeX'); const rangeY=document.getElementById('rangeY'); const rangeZ=document.getElementById('rangeZ');
+
+// ===== sensors =====
+dmAvail.textContent='DeviceMotion: ' + (typeof DeviceMotionEvent!=='undefined' ? 'OK' : 'brak');
+doAvail.textContent='DeviceOrientation: ' + (typeof DeviceOrientationEvent!=='undefined' ? 'OK' : 'brak');
+
+let sensorsOn=false, beta=0, gamma=0, alpha=0, ax=0, ay=0, az=0;
+async function enableSensors(){
+  try{
+    if (typeof DeviceMotionEvent!=='undefined' && typeof DeviceMotionEvent.requestPermission==='function'){
+      const ok=await DeviceMotionEvent.requestPermission(); if(ok!=='granted') throw new Error('No motion perm');
+    }
+    if (typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){
+      try{ await DeviceOrientationEvent.requestPermission(); }catch(_){}
+    }
+  }catch(_){}
+  window.addEventListener('deviceorientation', e=>{
+    if (typeof e.beta==='number')  beta=e.beta||0;
+    if (typeof e.gamma==='number') gamma=e.gamma||0;
+    if (typeof e.alpha==='number') alpha=e.alpha||0;
+    betaVal.textContent=beta.toFixed(1); gammaVal.textContent=gamma.toFixed(1); alphaVal.textContent=alpha.toFixed(1);
+  }, true);
+  window.addEventListener('devicemotion', e=>{
+    const a=e.acceleration || e.accelerationIncludingGravity || {x:0,y:0,z:0};
+    ax=a.x||0; ay=a.y||0; az=a.z||0;
+    axVal.textContent=ax.toFixed(2); ayVal.textContent=ay.toFixed(2); azVal.textContent=az.toFixed(2);
+  }, true);
+  sensorsOn=true; btnSensors.classList.toggle('on',true);
+}
+btnSensors.onclick=()=>{ sensorsOn ? (sensorsOn=false, btnSensors.classList.remove('on')) : enableSensors(); };
+
+// ===== classic mode integrator (prosty, stabilny) =====
+let baseAx=0, baseAy=0, baseAz=0;
+let posX=0,posY=0,posZ=0, velX=0,velY=0,velZ=0;
+let sensX=0.10, sensY=0.12, sensZ=0.12;
+const friction=0.993, deadzoneA=0.03;
+btnCalNeutral.onclick=()=>{ baseAx=ax; baseAy=ay; baseAz=az; btnCalNeutral.classList.toggle('on'); setTimeout(()=>btnCalNeutral.classList.remove('on'),220); };
+// prościutka kalibracja Z->Y->X (auto): kliknięcie kreatora po prostu centrowanie Z; pełny wizard zostawiamy na później
+btnWizard.onclick=()=>{ posX=posY=posZ=velX=velY=velZ=0; btnWizard.classList.toggle('on'); setTimeout(()=>btnWizard.classList.remove('on'),220); };
+
+function stepClassic(dt){
+  let rx=ax-baseAx, ry=ay-baseAy, rz=az-baseAz;
+  if (Math.abs(rx)<deadzoneA) rx=0;
+  if (Math.abs(ry)<deadzoneA) ry=0;
+  if (Math.abs(rz)<deadzoneA) rz=0;
+  velX = velX*friction + rx*sensX*dt;
+  velY = velY*friction + ry*sensY*dt;
+  velZ = velZ*friction + rz*sensZ*dt;
+  posX += velX*dt; posY += velY*dt; posZ += velZ*dt;
+  posX = clamp(posX, -+rangeX.value, +rangeX.value);
+  posY = clamp(posY, 0, +rangeY.value);
+  const halfZ=+rangeZ.value*0.5; posZ = clamp(posZ, -halfZ*2, halfZ*2);
+  // mapowanie
+  const zActive = Math.abs(posZ) <= halfZ;
+  const vol = zActive ? clamp((posX/+rangeX.value)*0.5+0.5,0,1) : 0;
+  let freq = linMap(posY, 0, +rangeY.value, +pitchMin.value, +pitchMax.value);
+  return {freq, vol};
+}
+
+// ===== angular mode mapping =====
+// beta: 0° (płasko) → vol 1, |beta|→90° → vol 0
+// gamma: -70..+70° → pitch min..max
+function mapAngular(){
+  const vol = clamp(1 - Math.min(90, Math.abs(beta))/90, 0, 1);
+  const g = clamp(gamma, -70, 70);
+  const freq = linMap(g, -70, 70, +pitchMin.value, +pitchMax.value);
+  return {freq, vol};
+}
+
+// ===== quantize =====
+function quantizeFreq(freq){
+  if(!quantize.checked || scale.value==='none') return freq;
+  const S={major:[0,2,4,5,7,9,11], minor:[0,2,3,5,7,8,10], pent:[0,2,4,7,9]};
+  const sc=S[scale.value]; if(!sc) return freq;
+  const midi=69+12*Math.log2(freq/440);
+  let best=Math.round(midi),bestD=1e9;
+  for(let k=-24;k<=24;k++){
+    const cand=Math.round(midi)+k, deg=((cand%12)+12)%12;
+    if(sc.includes(deg)){ const d=Math.abs(cand-midi); if(d<bestD){bestD=d;best=cand;} }
+  }
+  return 440*Math.pow(2,(best-69)/12);
+}
+
+// ===== UI controls =====
+btnAudio.onclick = async ()=>{
+  initAudio();
+  if (audio.state==='suspended') await audio.resume();
+  running=!running;
+  btnAudio.classList.toggle('on', running);
+  if(!running) setGate(false);
+};
+btnNote.onclick = ()=> setGate(!gate);
+
+// ===== draw scope + bars =====
+function drawScope(){
+  sctx.clearRect(0,0,scope.width,scope.height);
+  sctx.fillStyle='#031017'; sctx.fillRect(0,0,scope.width,scope.height);
+  if (analyser){
+    const buf=new Uint8Array(analyser.fftSize);
+    analyser.getByteTimeDomainData(buf);
+    sctx.beginPath(); sctx.strokeStyle='#6cf'; sctx.lineWidth=1;
+    const step=scope.width/buf.length;
+    for(let i=0;i<buf.length;i++){
+      const v=buf[i]/128.0, y=80+(v-1)*55;
+      if(i===0) sctx.moveTo(0,y); else sctx.lineTo(i*step,y);
+    } sctx.stroke();
+  }
+}
+function setBar(el, pct){ el.style.width = clamp(pct,0,100)+'%'; }
+
+// ===== loop =====
+let lastT=null, smoothPitch=null;
+function loop(ts){
+  if (running){
+    if (lastT==null) lastT=ts; const dt=Math.min(0.05, Math.max(0.001,(ts-lastT)/1000)); lastT=ts;
+
+    // wybrany tryb
+    const mode = document.querySelector('input[name="mode"]:checked').value;
+    let {freq, vol} = (mode==='angular') ? mapAngular() : stepClassic(dt);
+
+    // kwantyzacja i smoothing
+    freq = quantizeFreq(freq);
+    const s=+smooth.value; if (smoothPitch==null) smoothPitch=freq;
+    smoothPitch = smoothPitch*s + freq*(1-s);
+
+    // audio
+    if (osc)  osc.frequency.setTargetAtTime(smoothPitch, audio.currentTime, 0.02);
+    if (volGain) volGain.gain.setTargetAtTime(vol, audio.currentTime, 0.03);
+
+    // wskaźniki
+    pitchRead.textContent = Math.round(smoothPitch);
+    volRead.textContent = vol.toFixed(2);
+    betaRead.textContent = beta.toFixed(1);
+    gammaRead.textContent = gamma.toFixed(1);
+    // paski (pitch ~ w zakresie, vol bezpośrednio)
+    const pPct = linMap(smoothPitch, +pitchMin.value, +pitchMax.value, 0, 100);
+    setBar(barPitch, pPct); setBar(barVol, vol*100);
+    // surowe kąty
+    setBar(barBeta, (1 - Math.min(90, Math.abs(beta))/90)*100);
+    setBar(barGamma, linMap(gamma, -70, 70, 0, 100));
+
+    drawScope();
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ===== resume audio when returning =====
+document.addEventListener('visibilitychange', async ()=>{
+  if (audio && audio.state==='suspended' && document.visibilityState==='visible'){ try{ await audio.resume(); }catch(_){ } }
+});
+})();
+</script>
+</body>
+</html>
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Theremin mobilny — Kalibracja Z→Y→X + ADSR (neon, fix)</title>
 <style>
   :root{--bg:#0e1117;--panel:#0a1420;--fg:#e6eef8;--mut:#9fb;--neon:#39ffc3;--neon2:#7ee1ff}
